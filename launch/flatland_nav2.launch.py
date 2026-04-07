@@ -2,23 +2,16 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import (
-    DeclareLaunchArgument,
-    IncludeLaunchDescription,
-    GroupAction,
-)
+from launch.actions import DeclareLaunchArgument
 from launch.conditions import IfCondition
-from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
-from launch_ros.actions import Node, LifecycleNode
-from launch_ros.event_handlers import OnStateTransition
+from launch.substitutions import LaunchConfiguration
+from launch_ros.actions import Node
 from nav2_common.launch import RewrittenYaml
 
 
 def generate_launch_description():
     # Directories
     bringup_dir = '/ros2_ws/src/flatland_nav2_bringup'
-    nav2_bringup_dir = get_package_share_directory('nav2_bringup')
 
     # Launch arguments
     use_rviz_arg = DeclareLaunchArgument(
@@ -85,17 +78,6 @@ def generate_launch_description():
         parameters=[configured_params],
     )
 
-    # Nav2 navigation launch (planner, controller, bt_navigator, etc.)
-    nav2_navigation = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(nav2_bringup_dir, 'launch', 'navigation_launch.py')
-        ),
-        launch_arguments={
-            'use_sim_time': use_sim_time,
-            'params_file': nav2_params_file,
-        }.items(),
-    )
-
     # Lifecycle manager for map_server and amcl
     lifecycle_manager_localization = Node(
         package='nav2_lifecycle_manager',
@@ -106,6 +88,84 @@ def generate_launch_description():
             'use_sim_time': use_sim_time,
             'autostart': True,
             'node_names': ['map_server', 'amcl'],
+        }],
+    )
+
+    # --- Nav2 navigation nodes (launched directly, without docking_server) ---
+    controller_server = Node(
+        package='nav2_controller',
+        executable='controller_server',
+        name='controller_server',
+        output='screen',
+        parameters=[configured_params],
+    )
+
+    planner_server = Node(
+        package='nav2_planner',
+        executable='planner_server',
+        name='planner_server',
+        output='screen',
+        parameters=[configured_params],
+    )
+
+    behavior_server = Node(
+        package='nav2_behaviors',
+        executable='behavior_server',
+        name='behavior_server',
+        output='screen',
+        parameters=[configured_params],
+    )
+
+    bt_navigator = Node(
+        package='nav2_bt_navigator',
+        executable='bt_navigator',
+        name='bt_navigator',
+        output='screen',
+        parameters=[configured_params],
+    )
+
+    waypoint_follower = Node(
+        package='nav2_waypoint_follower',
+        executable='waypoint_follower',
+        name='waypoint_follower',
+        output='screen',
+        parameters=[configured_params],
+    )
+
+    velocity_smoother = Node(
+        package='nav2_velocity_smoother',
+        executable='velocity_smoother',
+        name='velocity_smoother',
+        output='screen',
+        parameters=[configured_params],
+    )
+
+    smoother_server = Node(
+        package='nav2_smoother',
+        executable='smoother_server',
+        name='smoother_server',
+        output='screen',
+        parameters=[configured_params],
+    )
+
+    # Lifecycle manager for navigation nodes
+    lifecycle_manager_navigation = Node(
+        package='nav2_lifecycle_manager',
+        executable='lifecycle_manager',
+        name='lifecycle_manager_navigation',
+        output='screen',
+        parameters=[{
+            'use_sim_time': use_sim_time,
+            'autostart': True,
+            'node_names': [
+                'controller_server',
+                'smoother_server',
+                'planner_server',
+                'behavior_server',
+                'bt_navigator',
+                'waypoint_follower',
+                'velocity_smoother',
+            ],
         }],
     )
 
@@ -131,6 +191,13 @@ def generate_launch_description():
         map_server,
         amcl,
         lifecycle_manager_localization,
-        nav2_navigation,
+        controller_server,
+        planner_server,
+        behavior_server,
+        bt_navigator,
+        waypoint_follower,
+        velocity_smoother,
+        smoother_server,
+        lifecycle_manager_navigation,
         rviz_node,
     ])

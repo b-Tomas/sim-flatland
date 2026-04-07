@@ -81,6 +81,28 @@ Visualization Manager:
       Line Style:
         Value: Lines
 
+    - Class: rviz_default_plugins/Polygon
+      Name: Robot Footprint
+      Enabled: true
+      Topic:
+        Value: /local_costmap/published_footprint
+        Depth: 5
+        Durability Policy: Volatile
+        Reliability Policy: Reliable
+      Color: 0; 170; 255
+      Alpha: 1.0
+
+    - Class: rviz_default_plugins/Polygon
+      Name: Global Footprint
+      Enabled: true
+      Topic:
+        Value: /global_costmap/published_footprint
+        Depth: 5
+        Durability Policy: Volatile
+        Reliability Policy: Reliable
+      Color: 0; 85; 255
+      Alpha: 0.5
+
     - Class: rviz_default_plugins/Marker
       Name: Flatland Debug
       Enabled: true

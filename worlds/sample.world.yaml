@@ -1,0 +1,13 @@
+properties:
+  velocity_iterations: 10
+  position_iterations: 10
+
+layers:
+  - name: "static"
+    map: "../maps/sample_map.yaml"
+    color: [1, 1, 1, 1]
+
+models:
+  - model: "../worlds/turtlebot.model.yaml"
+    name: "turtlebot"
+    pose: [5.0, 15.0, 0.0]

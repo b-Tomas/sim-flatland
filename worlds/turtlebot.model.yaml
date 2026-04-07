@@ -1,0 +1,39 @@
+bodies:
+  - name: "base_link"
+    pose: [0, 0, 0]
+    type: dynamic
+    color: [0, 0, 1, 1]
+    footprints:
+      - type: circle
+        radius: 0.22
+        density: 1.0
+        layers: ["all"]
+    linear_damping: 5.0
+    angular_damping: 5.0
+
+plugins:
+  - type: DiffDrive
+    name: diff_drive
+    body: base_link
+    odom_frame_id: /odom
+    twist_sub: cmd_vel
+    odom_pub: odom
+    ground_truth_pub: odometry/ground_truth
+    enable_odom_pub: true
+    pub_rate: 200.0
+
+  - type: Laser
+    name: laser
+    body: base_link
+    frame: /laser_link
+    topic: scan
+    broadcast_tf: true
+    origin: [0, 0, 0]
+    range: 10.0
+    angle: {min: -3.14159, max: 3.14159, increment: 0.01745}
+    noise_std_dev: 0.01
+    update_rate: 10.0
+
+  - type: ModelTfPublisher
+    name: tf_publisher
+    publish_tf_world: false

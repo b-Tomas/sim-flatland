@@ -11,6 +11,8 @@ Docker environment for running the [avidbots/flatland](https://github.com/avidbo
 - **Battery Simulation** - Velocity-based battery drain plugin with `sensor_msgs/BatteryState` output
 - **Sample world** - 20x20m multi-room office with a differential-drive robot (laser, odometry, battery)
 
+![Demo of Flatland Nav2](demo.gif)
+
 ## Prerequisites
 
 - Docker and Docker Compose

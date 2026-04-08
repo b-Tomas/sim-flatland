@@ -5,6 +5,8 @@ Panels:
     Name: Views
   - Class: rviz_common/Tool Properties
     Name: Tool Properties
+  - Class: nav2_rviz_plugins/Navigation 2
+    Name: Navigation 2
 Visualization Manager:
   Class: ""
   Displays:
@@ -43,7 +45,7 @@ Visualization Manager:
 
     - Class: rviz_default_plugins/Map
       Name: Global Costmap
-      Enabled: true
+      Enabled: false
       Topic:
         Value: /global_costmap/costmap
         Depth: 1
@@ -92,16 +94,27 @@ Visualization Manager:
       Color: 0; 170; 255
       Alpha: 1.0
 
-    - Class: rviz_default_plugins/Polygon
-      Name: Global Footprint
+    - Class: rviz_default_plugins/Odometry
+      Name: Odometry
       Enabled: true
       Topic:
-        Value: /global_costmap/published_footprint
+        Value: /odom
         Depth: 5
         Durability Policy: Volatile
         Reliability Policy: Reliable
-      Color: 0; 85; 255
-      Alpha: 0.5
+      Keep: 1
+      Position Tolerance: 0.1
+      Angle Tolerance: 0.1
+      Covariance:
+        Value: false
+      Arrow Length: 0.3
+
+    - Class: rviz_default_plugins/Marker
+      Name: Battery Status
+      Enabled: true
+      Topic:
+        Value: /battery_marker
+        Depth: 5
 
     - Class: rviz_default_plugins/Marker
       Name: Flatland Debug
@@ -121,6 +134,9 @@ Visualization Manager:
     - Class: rviz_default_plugins/SetInitialPose
       Topic:
         Value: /initialpose
+    - Class: nav2_rviz_plugins/GoalTool
+      Topic:
+        Value: /goal_pose
     - Class: rviz_default_plugins/SetGoal
       Topic:
         Value: /goal_pose

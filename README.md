@@ -8,7 +8,8 @@ Docker environment for running the [avidbots/flatland](https://github.com/avidbo
 - **Nav2** - Full navigation stack (planner, controller, BT navigator, AMCL, recoveries)
 - **Map Server** - Serves occupancy grid maps
 - **Rviz2** - Visualization with preconfigured layout
-- **Sample world** - 10x10m room with a differential-drive robot (laser + odometry)
+- **Battery Simulation** - Velocity-based battery drain plugin with `sensor_msgs/BatteryState` output
+- **Sample world** - 20x20m multi-room office with a differential-drive robot (laser, odometry, battery)
 
 ## Prerequisites
 
@@ -79,7 +80,7 @@ runtime: nvidia
 ## Using Navigation
 
 1. Start the simulation with rviz (`docker compose up`)
-2. AMCL automatically sets the initial pose at the robot's spawn position (5, 5) - no manual step needed
+2. AMCL automatically sets the initial pose at the robot's spawn position - no manual step needed
 3. Use **Nav2 Goal** in rviz to send navigation goals - the robot will plan and navigate autonomously
 
 To re-localize the robot manually, use rviz's **2D Pose Estimate** tool.
@@ -115,6 +116,31 @@ docker compose run --rm flatland-nav2 --with-rviz \
 
 Edit `config/nav2_params.yaml` to tune navigation behavior (controller, planner, costmaps, AMCL, etc.). Changes take effect on next container start since the config directory is bind-mounted.
 
+## Battery Simulation
+
+The robot includes a battery plugin that simulates finite energy. The battery drains at a base idle rate and faster when the robot moves. When the battery reaches 0%, the robot stops.
+
+Battery state is visible in rviz as a floating text marker above the robot (green/orange/red depending on charge level) and published as a standard `sensor_msgs/BatteryState` message.
+
+Configuration in `worlds/turtlebot.model.yaml`:
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `capacity_ah` | 5.0 | Battery capacity in Amp-hours |
+| `voltage_full` | 12.6 | Voltage at 100% charge |
+| `voltage_empty` | 10.0 | Voltage at 0% charge |
+| `base_current` | 0.5 | Idle current draw (Amps) |
+| `linear_current_coeff` | 2.0 | Additional Amps per m/s of linear speed |
+| `angular_current_coeff` | 0.5 | Additional Amps per rad/s of angular speed |
+| `initial_charge` | 1.0 | Starting charge fraction (0.0 - 1.0) |
+| `pub_rate` | 1.0 | Publish rate in Hz |
+
+Monitor battery from the command line:
+
+```bash
+ros2 topic echo /battery_state
+```
+
 ## File Structure
 
 ```
@@ -124,15 +150,18 @@ flatland/
   docker-compose.yml                # X11/Wayland forwarding, GPU, host networking
   config/
     nav2_params.yaml                # Nav2 parameters (DWB controller, NavFn planner)
-    flatland_rviz.rviz              # Rviz2 layout (map, scan, TF, costmaps, paths)
+    flatland_rviz.rviz              # Rviz2 layout (map, scan, TF, costmaps, Nav2 panel, battery)
   launch/
     flatland_nav2.launch.py         # Unified launch file
+  plugins/
+    battery.h                       # Battery simulation plugin header
+    battery.cpp                     # Battery simulation plugin implementation
   maps/
     sample_map.yaml                 # Map metadata
-    sample_map.pgm                  # 10x10m room occupancy grid
+    sample_map.pgm                  # 20x20m multi-room office occupancy grid
   worlds/
     sample.world.yaml               # Flatland world definition
-    turtlebot.model.yaml            # Robot model (DiffDrive + Laser + TF)
+    turtlebot.model.yaml            # Robot model (DiffDrive + Laser + Battery + TF)
 ```
 
 ## ROS2 Topics
@@ -149,6 +178,9 @@ Key topics published by the simulation:
 | `/clock` | `rosgraph_msgs/Clock` | Flatland server (sim time) |
 | `/plan` | `nav_msgs/Path` | Nav2 planner |
 | `/local_plan` | `nav_msgs/Path` | Nav2 controller |
+| `/battery_state` | `sensor_msgs/BatteryState` | Battery plugin (charge, voltage, current, percentage) |
+| `/battery_marker` | `visualization_msgs/Marker` | Battery plugin (floating text for rviz) |
+| `/local_costmap/published_footprint` | `geometry_msgs/PolygonStamped` | Nav2 costmap (robot footprint) |
 
 ## Troubleshooting
 

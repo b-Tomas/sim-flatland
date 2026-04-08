@@ -36,6 +36,10 @@ RUN mkdir -p /ros2_ws/src && \
     cd /ros2_ws/src && \
     git clone --branch ros2 --depth 1 https://github.com/avidbots/flatland.git
 
+# Copy battery plugin source into flatland_plugins
+COPY plugins/battery.h /ros2_ws/src/flatland/flatland_plugins/include/flatland_plugins/
+COPY plugins/battery.cpp /ros2_ws/src/flatland/flatland_plugins/src/
+
 # Patch flatland source for ROS2 Jazzy / Ubuntu 24.04 compatibility
 RUN cd /ros2_ws/src/flatland && \
     # Fix missing <cstdint> include (C++17 no longer implicitly includes it)
@@ -90,7 +94,13 @@ find_package(sensor_msgs REQUIRED)\nfind_package(visualization_msgs REQUIRED)\nf
       flatland_plugins/plugin_description.xml && \
     # Fix null pointer crash: initialize twist_msg_ to avoid segfault before first message
     sed -i 's|geometry_msgs::msg::Twist::SharedPtr twist_msg_;|geometry_msgs::msg::Twist::SharedPtr twist_msg_ = std::make_shared<geometry_msgs::msg::Twist>();|' \
-      flatland_plugins/include/flatland_plugins/diff_drive.h
+      flatland_plugins/include/flatland_plugins/diff_drive.h && \
+    # Add battery plugin to CMakeLists.txt source list
+    sed -i '/src\/update_timer.cpp/a \  src/battery.cpp' \
+      flatland_plugins/CMakeLists.txt && \
+    # Register battery plugin in plugin_description.xml
+    sed -i '/<\/library>/i \  <class type="flatland_plugins::Battery" base_class_type="flatland_server::ModelPlugin">\n    <description>Battery simulation plugin</description>\n  </class>' \
+      flatland_plugins/plugin_description.xml
 
 # Install rosdep dependencies and build flatland
 # Skip flatland_viz (rviz2 alone handles visualization)

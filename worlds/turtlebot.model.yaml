@@ -34,6 +34,19 @@ plugins:
     noise_std_dev: 0.01
     update_rate: 10.0
 
+  - type: Battery
+    name: battery
+    body: base_link
+    topic: battery_state
+    pub_rate: 1.0
+    capacity_ah: 5.0
+    voltage_full: 12.6
+    voltage_empty: 10.0
+    base_current: 0.5
+    linear_current_coeff: 2.0
+    angular_current_coeff: 0.5
+    initial_charge: 1.0
+
   - type: ModelTfPublisher
     name: tf_publisher
     publish_tf_world: false

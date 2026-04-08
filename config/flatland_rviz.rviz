@@ -116,6 +116,15 @@ Visualization Manager:
         Value: /battery_marker
         Depth: 5
 
+    - Class: rviz_default_plugins/MarkerArray
+      Name: Charging Zones
+      Enabled: true
+      Topic:
+        Value: /charging_zones
+        Depth: 1
+        Durability Policy: Transient Local
+        Reliability Policy: Reliable
+
     - Class: rviz_default_plugins/Marker
       Name: Flatland Debug
       Enabled: true

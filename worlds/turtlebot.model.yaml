@@ -42,10 +42,20 @@ plugins:
     capacity_ah: 5.0
     voltage_full: 12.6
     voltage_empty: 10.0
-    base_current: 0.5
-    linear_current_coeff: 2.0
-    angular_current_coeff: 0.5
+    base_current: 9.0
+    linear_current_coeff: 6.0
+    angular_current_coeff: 2.0
+    charge_current: 30.0
     initial_charge: 1.0
+    charging_zones:
+      - name: "Charger A (Office)"
+        x: 9.0
+        y: 18.5
+        radius: 0.6
+      - name: "Charger D (Lobby)"
+        x: 11.5
+        y: 1.5
+        radius: 0.6
 
   - type: ModelTfPublisher
     name: tf_publisher

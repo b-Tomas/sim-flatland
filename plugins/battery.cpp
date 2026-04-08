@@ -20,7 +20,24 @@ void Battery::OnInitialize(const YAML::Node &config) {
   base_current_ = reader.Get<double>("base_current", 0.5);
   linear_current_coeff_ = reader.Get<double>("linear_current_coeff", 2.0);
   angular_current_coeff_ = reader.Get<double>("angular_current_coeff", 0.5);
+  charge_current_ = reader.Get<double>("charge_current", 2.0);
   double initial_charge = reader.Get<double>("initial_charge", 1.0);
+
+  // Parse charging zones: list of {x, y, radius, name}
+  if (config["charging_zones"]) {
+    for (const auto &zone_node : config["charging_zones"]) {
+      YamlReader zone_reader(node_, zone_node);
+      ChargingZone zone;
+      zone.x = zone_reader.Get<double>("x");
+      zone.y = zone_reader.Get<double>("y");
+      zone.radius = zone_reader.Get<double>("radius", 0.5);
+      zone.name = zone_reader.Get<std::string>("name", "charger");
+      zone_reader.EnsureAccessedAllKeys();
+      charging_zones_.push_back(zone);
+    }
+    // Mark key as accessed so EnsureAccessedAllKeys doesn't complain
+    reader.accessed_keys_.insert("charging_zones");
+  }
 
   reader.EnsureAccessedAllKeys();
 
@@ -31,6 +48,9 @@ void Battery::OnInitialize(const YAML::Node &config) {
 
   charge_ah_ = capacity_ah_ * initial_charge;
   depleted_ = false;
+  charging_override_ = false;
+  in_charging_zone_ = false;
+  zones_published_ = false;
 
   update_timer_.SetRate(pub_rate);
 
@@ -38,19 +58,84 @@ void Battery::OnInitialize(const YAML::Node &config) {
       GetModel()->NameSpaceTopic(topic), 1);
   marker_pub_ = node_->create_publisher<visualization_msgs::msg::Marker>(
       GetModel()->NameSpaceTopic("battery_marker"), 1);
+  // Use transient local QoS so late-joining subscribers (rviz) receive the zone markers
+  auto latched_qos = rclcpp::QoS(1).transient_local();
+  zone_marker_pub_ = node_->create_publisher<visualization_msgs::msg::MarkerArray>(
+      GetModel()->NameSpaceTopic("charging_zones"), latched_qos);
+
+  // Service: enable/disable charging manually
+  set_charging_srv_ = node_->create_service<std_srvs::srv::SetBool>(
+      GetModel()->NameSpaceTopic("set_charging"),
+      [this](const std::shared_ptr<std_srvs::srv::SetBool::Request> req,
+             std::shared_ptr<std_srvs::srv::SetBool::Response> res) {
+        charging_override_ = req->data;
+        res->success = true;
+        if (req->data) {
+          res->message = "Charging enabled";
+          RCLCPP_INFO(node_->get_logger(), "Battery: manual charging enabled");
+        } else {
+          res->message = "Charging disabled";
+          RCLCPP_INFO(node_->get_logger(), "Battery: manual charging disabled");
+        }
+      });
+
+  // Service: reset battery to full
+  reset_battery_srv_ = node_->create_service<std_srvs::srv::Trigger>(
+      GetModel()->NameSpaceTopic("reset_battery"),
+      [this](const std::shared_ptr<std_srvs::srv::Trigger::Request>,
+             std::shared_ptr<std_srvs::srv::Trigger::Response> res) {
+        charge_ah_ = capacity_ah_;
+        depleted_ = false;
+        charging_override_ = false;
+        res->success = true;
+        res->message = "Battery reset to 100%";
+        RCLCPP_INFO(node_->get_logger(), "Battery: reset to full charge");
+      });
 
   RCLCPP_INFO(node_->get_logger(),
               "Battery plugin: capacity=%.1fAh voltage=%.1f-%.1fV "
-              "base_current=%.2fA lin_coeff=%.2f ang_coeff=%.2f",
+              "base_current=%.2fA charge_current=%.2fA zones=%zu",
               capacity_ah_, voltage_empty_, voltage_full_,
-              base_current_, linear_current_coeff_, angular_current_coeff_);
+              base_current_, charge_current_, charging_zones_.size());
+  for (const auto &z : charging_zones_) {
+    RCLCPP_INFO(node_->get_logger(),
+                "  Charging zone '%s' at (%.1f, %.1f) radius=%.1fm",
+                z.name.c_str(), z.x, z.y, z.radius);
+  }
+}
+
+bool Battery::IsInChargingZone(double rx, double ry) const {
+  for (const auto &zone : charging_zones_) {
+    double dx = rx - zone.x;
+    double dy = ry - zone.y;
+    if (dx * dx + dy * dy <= zone.radius * zone.radius) {
+      return true;
+    }
+  }
+  return false;
 }
 
 void Battery::BeforePhysicsStep(const Timekeeper &timekeeper) {
   double dt = timekeeper.GetStepSize();
+  b2Body *physics = body_->physics_body_;
+  b2Vec2 pos = physics->GetPosition();
 
-  if (!depleted_) {
-    b2Body *physics = body_->physics_body_;
+  // Check if robot is in a charging zone
+  in_charging_zone_ = IsInChargingZone(pos.x, pos.y);
+  bool is_charging = charging_override_ || in_charging_zone_;
+
+  if (is_charging) {
+    // Charge the battery
+    charge_ah_ += charge_current_ * dt / 3600.0;
+    if (charge_ah_ >= capacity_ah_) {
+      charge_ah_ = capacity_ah_;
+    }
+    if (depleted_ && charge_ah_ > 0.0) {
+      depleted_ = false;
+      RCLCPP_INFO(node_->get_logger(), "Battery: charging resumed, robot can move again");
+    }
+  } else if (!depleted_) {
+    // Drain the battery based on velocity
     b2Vec2 linear_vel = physics->GetLinearVelocityFromLocalPoint(b2Vec2(0, 0));
     float angular_vel = physics->GetAngularVelocity();
 
@@ -71,55 +156,65 @@ void Battery::BeforePhysicsStep(const Timekeeper &timekeeper) {
 
   // Stop robot when depleted
   if (depleted_) {
-    b2Body *physics = body_->physics_body_;
     physics->SetLinearVelocity(b2Vec2(0, 0));
     physics->SetAngularVelocity(0);
   }
 
   // Publish at configured rate
   if (update_timer_.CheckUpdate(timekeeper)) {
+    bool is_charging_now = charging_override_ || in_charging_zone_;
     double percentage = charge_ah_ / capacity_ah_;
     double voltage = voltage_empty_ +
                      (voltage_full_ - voltage_empty_) * percentage;
 
-    // Compute instantaneous current for the message
-    double current = base_current_;
-    if (!depleted_) {
-      b2Body *physics = body_->physics_body_;
-      b2Vec2 vel = physics->GetLinearVelocityFromLocalPoint(b2Vec2(0, 0));
-      double speed = std::sqrt(vel.x * vel.x + vel.y * vel.y);
-      current += linear_current_coeff_ * speed +
-                 angular_current_coeff_ * std::fabs(physics->GetAngularVelocity());
+    // Compute instantaneous current
+    double current;
+    if (is_charging_now) {
+      current = -charge_current_;  // positive = charging in BatteryState convention
+    } else {
+      current = base_current_;
+      if (!depleted_) {
+        b2Vec2 vel = physics->GetLinearVelocityFromLocalPoint(b2Vec2(0, 0));
+        double speed = std::sqrt(vel.x * vel.x + vel.y * vel.y);
+        current += linear_current_coeff_ * speed +
+                   angular_current_coeff_ * std::fabs(physics->GetAngularVelocity());
+      }
     }
 
     sensor_msgs::msg::BatteryState msg;
     msg.header.stamp = timekeeper.GetSimTime();
     msg.header.frame_id = body_->name_;
     msg.voltage = static_cast<float>(voltage);
-    msg.current = static_cast<float>(-current);  // negative = discharging
+    msg.current = static_cast<float>(is_charging_now ? current : -current);
     msg.charge = static_cast<float>(charge_ah_);
     msg.capacity = static_cast<float>(capacity_ah_);
     msg.design_capacity = static_cast<float>(capacity_ah_);
     msg.percentage = static_cast<float>(percentage);
-    msg.power_supply_status = depleted_
-        ? sensor_msgs::msg::BatteryState::POWER_SUPPLY_STATUS_NOT_CHARGING
-        : sensor_msgs::msg::BatteryState::POWER_SUPPLY_STATUS_DISCHARGING;
+    if (depleted_) {
+      msg.power_supply_status =
+          sensor_msgs::msg::BatteryState::POWER_SUPPLY_STATUS_NOT_CHARGING;
+    } else if (is_charging_now) {
+      msg.power_supply_status =
+          sensor_msgs::msg::BatteryState::POWER_SUPPLY_STATUS_CHARGING;
+    } else {
+      msg.power_supply_status =
+          sensor_msgs::msg::BatteryState::POWER_SUPPLY_STATUS_DISCHARGING;
+    }
     msg.power_supply_health =
         sensor_msgs::msg::BatteryState::POWER_SUPPLY_HEALTH_GOOD;
     msg.power_supply_technology =
         sensor_msgs::msg::BatteryState::POWER_SUPPLY_TECHNOLOGY_LION;
     msg.present = true;
-
     pub_->publish(msg);
 
-    // Publish text marker above robot showing battery info
-    b2Body *physics = body_->physics_body_;
-    b2Vec2 pos = physics->GetPosition();
-
+    // Publish text marker above robot
     char text_buf[128];
+    const char *status_str = is_charging_now ? "CHG" : (depleted_ ? "DEAD" : "");
     std::snprintf(text_buf, sizeof(text_buf),
-                  "Batt: %.0f%%  %.1fV  %.2fA",
-                  percentage * 100.0, voltage, -current);
+                  "Batt: %.0f%%  %.1fV  %.2fA %s",
+                  percentage * 100.0, voltage,
+                  is_charging_now ? current : -current,
+                  status_str);
 
     visualization_msgs::msg::Marker marker;
     marker.header.stamp = timekeeper.GetSimTime();
@@ -134,6 +229,8 @@ void Battery::BeforePhysicsStep(const Timekeeper &timekeeper) {
     marker.scale.z = 0.3;
     if (depleted_) {
       marker.color.r = 1.0; marker.color.g = 0.0; marker.color.b = 0.0;
+    } else if (is_charging_now) {
+      marker.color.r = 0.0; marker.color.g = 0.8; marker.color.b = 1.0;
     } else if (percentage < 0.2) {
       marker.color.r = 1.0; marker.color.g = 0.5; marker.color.b = 0.0;
     } else {
@@ -143,6 +240,52 @@ void Battery::BeforePhysicsStep(const Timekeeper &timekeeper) {
     marker.text = text_buf;
     marker.lifetime = rclcpp::Duration::from_seconds(2.0);
     marker_pub_->publish(marker);
+
+    // Publish charging zone markers periodically (transient local QoS also latches for late joiners)
+    if (!charging_zones_.empty()) {
+      visualization_msgs::msg::MarkerArray zone_markers;
+      for (size_t i = 0; i < charging_zones_.size(); ++i) {
+        const auto &z = charging_zones_[i];
+
+        // Circle marker for the zone
+        visualization_msgs::msg::Marker circle;
+        circle.header.stamp = timekeeper.GetSimTime();
+        circle.header.frame_id = "map";
+        circle.ns = "charging_zones";
+        circle.id = static_cast<int>(i * 2);
+        circle.type = visualization_msgs::msg::Marker::CYLINDER;
+        circle.action = visualization_msgs::msg::Marker::ADD;
+        circle.pose.position.x = z.x;
+        circle.pose.position.y = z.y;
+        circle.pose.position.z = 0.01;
+        circle.scale.x = z.radius * 2.0;
+        circle.scale.y = z.radius * 2.0;
+        circle.scale.z = 0.02;
+        circle.color.r = 0.0; circle.color.g = 0.6; circle.color.b = 1.0;
+        circle.color.a = 0.4;
+        circle.lifetime = rclcpp::Duration::from_seconds(0);  // forever
+        zone_markers.markers.push_back(circle);
+
+        // Label
+        visualization_msgs::msg::Marker label;
+        label.header.stamp = timekeeper.GetSimTime();
+        label.header.frame_id = "map";
+        label.ns = "charging_zone_labels";
+        label.id = static_cast<int>(i * 2 + 1);
+        label.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
+        label.action = visualization_msgs::msg::Marker::ADD;
+        label.pose.position.x = z.x;
+        label.pose.position.y = z.y;
+        label.pose.position.z = 0.5;
+        label.scale.z = 0.25;
+        label.color.r = 0.0; label.color.g = 0.8; label.color.b = 1.0;
+        label.color.a = 1.0;
+        label.text = z.name;
+        label.lifetime = rclcpp::Duration::from_seconds(0);
+        zone_markers.markers.push_back(label);
+      }
+      zone_marker_pub_->publish(zone_markers);
+    }
   }
 }
 

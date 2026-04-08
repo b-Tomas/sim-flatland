@@ -118,11 +118,13 @@ Edit `config/nav2_params.yaml` to tune navigation behavior (controller, planner,
 
 ## Battery Simulation
 
-The robot includes a battery plugin that simulates finite energy. The battery drains at a base idle rate and faster when the robot moves. When the battery reaches 0%, the robot stops.
+The robot includes a battery plugin that simulates finite energy. The battery drains at a base idle rate and faster when the robot moves. When the battery reaches 0%, the robot stops. The battery recharges automatically when the robot enters a charging zone, or manually via ROS2 services.
 
-Battery state is visible in rviz as a floating text marker above the robot (green/orange/red depending on charge level) and published as a standard `sensor_msgs/BatteryState` message.
+Battery state is visible in rviz as a floating text marker above the robot (green when healthy, orange below 20%, cyan when charging, red when depleted). Charging zones appear as blue circles on the map.
 
-Configuration in `worlds/turtlebot.model.yaml`:
+### Configuration
+
+Parameters in `worlds/turtlebot.model.yaml`:
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
@@ -132,13 +134,46 @@ Configuration in `worlds/turtlebot.model.yaml`:
 | `base_current` | 0.5 | Idle current draw (Amps) |
 | `linear_current_coeff` | 2.0 | Additional Amps per m/s of linear speed |
 | `angular_current_coeff` | 0.5 | Additional Amps per rad/s of angular speed |
+| `charge_current` | 2.0 | Charging current (Amps) |
 | `initial_charge` | 1.0 | Starting charge fraction (0.0 - 1.0) |
 | `pub_rate` | 1.0 | Publish rate in Hz |
 
-Monitor battery from the command line:
+### Charging Zones
+
+Charging zones are circular regions defined in the robot model YAML. When the robot enters a zone, charging starts automatically:
+
+```yaml
+charging_zones:
+  - name: "Charger B (Lab)"
+    x: 15.0
+    y: 15.0
+    radius: 0.6
+  - name: "Charger D (Lobby)"
+    x: 17.0
+    y: 3.0
+    radius: 0.6
+```
+
+The sample world includes two chargers: one in the Lab (Room B) and one in the Lobby (Room D). Navigate the robot to either location to recharge.
+
+### ROS2 Services
+
+| Service | Type | Description |
+|---------|------|-------------|
+| `/set_charging` | `std_srvs/SetBool` | Manually enable/disable charging (overrides zone detection) |
+| `/reset_battery` | `std_srvs/Trigger` | Instantly reset battery to 100% |
+
+Examples:
 
 ```bash
+# Monitor battery state
 ros2 topic echo /battery_state
+
+# Manually enable charging
+ros2 service call /set_charging std_srvs/srv/SetBool '{data: true}'
+
+# Reset battery to full
+ros2 service call /reset_battery std_srvs/srv/Trigger '{}'
 ```
 
 ## File Structure
@@ -180,6 +215,7 @@ Key topics published by the simulation:
 | `/local_plan` | `nav_msgs/Path` | Nav2 controller |
 | `/battery_state` | `sensor_msgs/BatteryState` | Battery plugin (charge, voltage, current, percentage) |
 | `/battery_marker` | `visualization_msgs/Marker` | Battery plugin (floating text for rviz) |
+| `/charging_zones` | `visualization_msgs/MarkerArray` | Battery plugin (zone circles and labels for rviz) |
 | `/local_costmap/published_footprint` | `geometry_msgs/PolygonStamped` | Nav2 costmap (robot footprint) |
 
 ## Troubleshooting

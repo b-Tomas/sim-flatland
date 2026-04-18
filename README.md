@@ -9,6 +9,7 @@ Docker environment for running the [avidbots/flatland](https://github.com/avidbo
 - **Map Server** - Serves occupancy grid maps
 - **Rviz2** - Visualization with preconfigured layout
 - **Battery Simulation** - Velocity-based battery drain plugin with `sensor_msgs/BatteryState` output
+- **ROS2 Agent** - Connects the simulated robot to OpenRobOps (runs in a sidecar container, optional)
 - **Sample world** - 20x20m multi-room office with a differential-drive robot (laser, odometry, battery)
 
 ![Demo of Flatland Nav2](demo.gif)
@@ -41,6 +42,19 @@ docker compose up
 ```bash
 docker compose run --rm flatland-nav2 --no-rviz
 ```
+
+### Run without the InOrbit agent
+
+An InOrbit agent sidecar is enabled by default (via `COMPOSE_PROFILES=agent` in `.env`). 
+The InOrbit agent is compatible with OpenRobOps (an option to run the OpenRobOps agent will replace this in the future).
+
+To skip it:
+
+```bash
+COMPOSE_PROFILES= docker compose up
+```
+
+`docker compose run --rm flatland-nav2 ...` already skips the agent, since `run` only starts the named service and its dependencies.
 
 ### Run rviz separately
 
@@ -178,13 +192,39 @@ ros2 service call /set_charging std_srvs/srv/SetBool '{data: true}'
 ros2 service call /reset_battery std_srvs/srv/Trigger '{}'
 ```
 
+## InOrbit Agent
+
+An [InOrbit ROS2 agent](https://www.inorbit.ai/) runs as a sidecar container (`inorbitai/agent:ros-jazzy-4.33.0`) alongside the simulation, connecting the simulated robot to your OpenRobOps or InOrbit instance. A second lightweight `busybox` container tails the agent log into the main `docker compose` output for easier debugging. Both services are part of the `agent` Compose profile, enabled by default via `.env`.
+
+### Configuration
+
+Copy the example env file and fill in your InOrbit credentials:
+
+```bash
+cp local/agent.env.sh.example local/agent.env.sh
+# edit local/agent.env.sh and set INORBIT_KEY to match your one of your robotApiKeys. 
+# Optionally change INORBIT_ID; the ID of the robot.
+# Other variables such as INORBIT_URL do not need to be changed.
+```
+
+The agent reads this file on startup. The entire `local/` directory is bind-mounted into the agent container at `/root/.inorbit/local/` and is gitignored, so runtime state (logs, cache) stays on the host.
+
+### Disabling the agent
+
+The agent is opt-out. To skip both the agent and its log tail:
+
+```bash
+COMPOSE_PROFILES= docker compose up
+```
+
 ## File Structure
 
 ```
 flatland/
   Dockerfile                        # Multi-layer build: Box2D + flatland + Nav2
   entrypoint.sh                     # Mode-switching entrypoint with display auto-detection
-  docker-compose.yml                # X11/Wayland forwarding, GPU, host networking
+  docker-compose.yml                # X11/Wayland forwarding, GPU, host networking, InOrbit agent
+  .env                              # COMPOSE_PROFILES=agent (default profiles for docker compose)
   config/
     nav2_params.yaml                # Nav2 parameters (DWB controller, NavFn planner)
     flatland_rviz.rviz              # Rviz2 layout (map, scan, TF, costmaps, Nav2 panel, battery)
@@ -199,6 +239,9 @@ flatland/
   worlds/
     sample.world.yaml               # Flatland world definition
     turtlebot.model.yaml            # Robot model (DiffDrive + Laser + Battery + TF)
+  local/                            # Bind-mounted into agent container (gitignored)
+    agent.env.sh                    # InOrbit agent credentials (INORBIT_KEY, INORBIT_URL, ...) - gitignored
+    agent.env.sh.example            # Template for agent.env.sh
 ```
 
 ## ROS2 Topics
@@ -258,3 +301,5 @@ The container uses `network_mode: host` for DDS multicast discovery. If running 
 ```bash
 ROS_DOMAIN_ID=42 docker compose up
 ```
+
+Note: This settings breaks InOrbit agent ROS discoverability (only nav2 and rviz can run in this mode).

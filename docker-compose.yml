@@ -65,9 +65,12 @@ services:
   # Notes:
   #  - It requires configuration in local/agent.env.sh
   #  - It requires adding a couple of module_states in the database (to be documented)
+  #  - Part of the "agent" profile (enabled by default via .env). To skip, run:
+  #      COMPOSE_PROFILES= docker compose up
   agent:
     image: inorbitai/agent:ros-jazzy-4.33.0
     container_name: agent
+    profiles: ["agent"]
     restart: always
     network_mode: host
     ipc: host
@@ -79,6 +82,7 @@ services:
   agent-logs:
     image: busybox
     container_name: agent_logs
+    profiles: ["agent"]
     depends_on: [agent]
     volumes:
       - ./local:/logs:ro

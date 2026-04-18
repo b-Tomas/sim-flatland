@@ -25,6 +25,7 @@ services:
       - ./worlds:/ros2_ws/worlds:ro
       - ./config:/ros2_ws/src/flatland_nav2_bringup/config:ro
     network_mode: host
+    ipc: host
     stdin_open: true
     tty: true
     # Allow access to GPU render nodes (226 = /dev/dri major number)
@@ -54,7 +55,31 @@ services:
       - ${XDG_RUNTIME_DIR:-/run/user/1000}/${WAYLAND_DISPLAY:-wayland-0}:/tmp/runtime/${WAYLAND_DISPLAY:-wayland-0}:ro
       - ./config:/ros2_ws/src/flatland_nav2_bringup/config:ro
     network_mode: host
+    ipc: host
     device_cgroup_rules:
       - 'c 226:* rmw'
     command: ["--rviz-only"]
       #runtime: nvidia
+
+  # ROS2 InOrbit agent
+  # Notes:
+  #  - It requires configuration in local/agent.env.sh
+  #  - It requires adding a couple of module_states in the database (to be documented)
+  agent:
+    image: inorbitai/agent:ros-jazzy-4.33.0
+    container_name: agent
+    restart: always
+    network_mode: host
+    ipc: host
+    volumes:
+      - ./local:/root/.inorbit/local/
+      - ./local/agent.env.sh:/root/.inorbit/local/agent.env.sh
+
+  # Tail agent logs from a different container; it's lightweight and it helps debugging in a single docker-compose terminal
+  agent-logs:
+    image: busybox
+    container_name: agent_logs
+    depends_on: [agent]
+    volumes:
+      - ./local:/logs:ro
+    command: ["sh", "-c", "until [ -f /logs/inorbit_agent.log ]; do sleep 1; done; tail -F /logs/inorbit_agent.log"]

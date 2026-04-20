@@ -1,0 +1,38 @@
+From eb320a811fabad359cf9c32ea32943150c1134d3 Mon Sep 17 00:00:00 2001
+From: Flatland Patcher <patcher@openrobops.local>
+Date: Mon, 20 Apr 2026 08:56:57 -0300
+Subject: [PATCH 06/12] Add explicit types and defaults to declare_parameter
+ for Jazzy
+
+rclcpp in Jazzy requires declare_parameter calls to provide either
+a ParameterValue default or an explicit type; the no-argument
+overload was removed. Supply the typed overload with sensible
+defaults matching what was previously passed from launch files.
+---
+ flatland_server/src/flatland_server_node.cpp | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/flatland_server/src/flatland_server_node.cpp b/flatland_server/src/flatland_server_node.cpp
+index bb274f8..b5ee9bc 100644
+--- a/flatland_server/src/flatland_server_node.cpp
++++ b/flatland_server/src/flatland_server_node.cpp
+@@ -76,11 +76,11 @@ class FlatlandServerNode : public rclcpp::Node
+     FlatlandServerNode()
+     : Node("flatland_server")
+     {
+-      declare_parameter("world_path");
+-      declare_parameter("update_rate");
+-      declare_parameter("step_size");
+-      declare_parameter("show_viz");
+-      declare_parameter("viz_pub_rate");
++      declare_parameter<std::string>("world_path", "");
++      declare_parameter<double>("update_rate", 200.0);
++      declare_parameter<double>("step_size", 0.005);
++      declare_parameter<double>("show_viz", 0.0);
++      declare_parameter<double>("viz_pub_rate", 30.0);
+ 
+       // Load parameters
+       if (!get_parameter("world_path", world_path_)) {
+-- 
+2.43.0
+

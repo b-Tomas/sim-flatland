@@ -24,6 +24,7 @@ Docker environment for running the [avidbots/flatland](https://github.com/avidbo
 ### Build the image
 
 ```bash
+git submodule update --init        # first time only: fetch upstream flatland
 docker compose build
 ```
 
@@ -239,10 +240,61 @@ flatland/
   worlds/
     sample.world.yaml               # Flatland world definition
     turtlebot.model.yaml            # Robot model (DiffDrive + Laser + Battery + TF)
+  patches/
+    flatland/                       # Unified-diff patches applied to upstream flatland at build time
+      0001-*.patch ... 0012-*.patch # One patch per concern; 0011-0012 are project-specific
+  third_party/
+    flatland/                       # Git submodule -> avidbots/flatland @ pinned SHA
   local/                            # Bind-mounted into agent container (gitignored)
     agent.env.sh                    # InOrbit agent credentials (INORBIT_KEY, INORBIT_URL, ...) - gitignored
     agent.env.sh.example            # Template for agent.env.sh
 ```
+
+## Updating the flatland patches
+
+Upstream `avidbots/flatland` is tracked as a git submodule at
+`third_party/flatland`, pinned to a specific commit. Our edits
+for ROS2 Jazzy / Ubuntu 24.04 compatibility (plus battery plugin
+registration) live as unified-diff files in `patches/flatland/`,
+applied at image build time. `git apply` fails loudly if a patch
+no longer applies, so upstream drift cannot silently regress the
+build.
+
+The first ten patches are upstream-compat fixes (candidates for a
+PR to avidbots); `0011-*` and `0012-*` are project-specific
+registration of the battery plugin.
+
+### Editing a patch / adding a new one
+
+```bash
+cd third_party/flatland
+BASE=$(git rev-parse HEAD)
+git checkout -b work "$BASE"
+git am --whitespace=nowarn ../../patches/flatland/*.patch
+# ...edit code, git add, git commit (with a clear message -- it
+# becomes the patch filename and the top of the unified diff)...
+
+# Regenerate the patch stack
+rm ../../patches/flatland/*.patch
+git format-patch "$BASE"..HEAD -o ../../patches/flatland/
+cd ../..
+git add patches/flatland
+```
+
+### Bumping the upstream pin
+
+```bash
+cd third_party/flatland
+git fetch origin
+git checkout <new-sha>       # or origin/ros2 for the current tip
+cd ../..
+# Re-apply the stack against the new base and regenerate as above.
+# If git am rejects a hunk, resolve manually, commit, re-format-patch.
+git add third_party/flatland patches/flatland
+```
+
+When upstream merges one of the compat patches, just delete the
+corresponding file from `patches/flatland/`.
 
 ## ROS2 Topics
 

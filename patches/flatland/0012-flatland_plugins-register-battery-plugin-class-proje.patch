@@ -1,0 +1,27 @@
+From 9b399ba249200a712e4b6b05bc49d7e2a7ce61a6 Mon Sep 17 00:00:00 2001
+From: Flatland Patcher <patcher@openrobops.local>
+Date: Mon, 20 Apr 2026 08:57:46 -0300
+Subject: [PATCH 12/12] flatland_plugins: register battery plugin class
+ (project-specific)
+
+Register flatland_plugins::Battery with pluginlib so the
+simulation can spawn it via plugin type at runtime.
+---
+ flatland_plugins/plugin_description.xml | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/flatland_plugins/plugin_description.xml b/flatland_plugins/plugin_description.xml
+index 4c79e5a..b7365de 100644
+--- a/flatland_plugins/plugin_description.xml
++++ b/flatland_plugins/plugin_description.xml
+@@ -26,4 +26,7 @@
+   <class type="flatland_plugins::RandomWall" base_class_type="flatland_server::WorldPlugin">
+     <description>Add random walls into the world</description>
+   </class>
++  <class type="flatland_plugins::Battery" base_class_type="flatland_server::ModelPlugin">
++    <description>Battery simulation plugin</description>
++  </class>
+ </library>
+-- 
+2.43.0
+

@@ -1,0 +1,98 @@
+From 138756d667b6856421c70de0c5c9c5c85f3dd1ab Mon Sep 17 00:00:00 2001
+From: Flatland Patcher <patcher@openrobops.local>
+Date: Mon, 20 Apr 2026 08:57:21 -0300
+Subject: [PATCH 07/12] flatland_plugins: CMakeLists Jazzy compat + missing
+ deps
+
+Several fixes to let flatland_plugins build against ROS2 Jazzy and
+the newer CMake/ament expectations:
+
+- Add find_package() for sensor_msgs, visualization_msgs,
+  interactive_markers, OpenCV (these were missing or no longer
+  transitively pulled in).
+- Extend ament_target_dependencies with the same new deps.
+- Link ${OpenCV_LIBRARIES} and include ${OpenCV_INCLUDE_DIRS}.
+- Soften -Wpedantic with -Wno-error=format so format-string
+  warnings in upstream pluginlib headers aren't fatal.
+- Rename ament_export_interfaces -> ament_export_targets
+  (Jazzy removed the old alias).
+- Correct pluginlib_export_plugin_description_file to reference
+  the 'flatland_server' base package, not 'flatland_plugins_lib'.
+- Move ament_package() to end of file so it runs after the new
+  pluginlib_export call.
+---
+ flatland_plugins/CMakeLists.txt | 16 +++++++++++-----
+ 1 file changed, 11 insertions(+), 5 deletions(-)
+
+diff --git a/flatland_plugins/CMakeLists.txt b/flatland_plugins/CMakeLists.txt
+index 482df6b..eea0a40 100644
+--- a/flatland_plugins/CMakeLists.txt
++++ b/flatland_plugins/CMakeLists.txt
+@@ -8,7 +8,7 @@ if(NOT CMAKE_CXX_STANDARD)
+ endif()
+ 
+ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+-  add_compile_options(-Wall -Wextra -Wpedantic)
++  add_compile_options(-Wall -Wextra -Wpedantic -Wno-error=format)
+ endif()
+ 
+ 
+@@ -27,6 +27,10 @@ find_package(tf2 REQUIRED)
+ find_package(tf2_ros REQUIRED)
+ find_package(tf2_geometry_msgs REQUIRED)
+ find_package(flatland_server REQUIRED)
++find_package(sensor_msgs REQUIRED)
++find_package(visualization_msgs REQUIRED)
++find_package(interactive_markers REQUIRED)
++find_package(OpenCV REQUIRED)
+ find_package(flatland_msgs REQUIRED)
+ find_package(yaml_cpp_vendor REQUIRED)
+ #  rostest
+@@ -66,7 +70,7 @@ add_library(flatland_plugins_lib SHARED
+   src/gps.cpp
+ )
+ 
+-ament_target_dependencies(flatland_plugins_lib rclcpp flatland_server flatland_msgs pluginlib std_msgs nav_msgs geometry_msgs tf2 tf2_ros tf2_geometry_msgs yaml_cpp_vendor)
++ament_target_dependencies(flatland_plugins_lib rclcpp flatland_server sensor_msgs visualization_msgs interactive_markers flatland_msgs pluginlib std_msgs nav_msgs geometry_msgs tf2 tf2_ros tf2_geometry_msgs yaml_cpp_vendor)
+ 
+ target_include_directories(flatland_plugins_lib PUBLIC
+   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+@@ -74,26 +78,27 @@ target_include_directories(flatland_plugins_lib PUBLIC
+   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/thirdparty/tweeny>
+   $<INSTALL_INTERFACE:include/thirdparty/tweeny>
+   ${Eigen3_INCLUDE_DIRS}
++  ${OpenCV_INCLUDE_DIRS}
+   ${LUA_INCLUDE_DIR}
+   ${yaml_cpp_vendor_INCLUDE_DIRS})
+ 
+ 
+ target_link_libraries(flatland_plugins_lib
++  ${OpenCV_LIBRARIES}
+   ${Eigen3_LIBRARIES}
+   ${LUA_LIBRARIES}
+   yaml-cpp
+ )
+ 
+-ament_export_interfaces(export_flatland_plugins_lib HAS_LIBRARY_TARGET)
++ament_export_targets(export_flatland_plugins_lib HAS_LIBRARY_TARGET)
+ # ament_export_libraries(flatland_lib)
+ ament_export_dependencies(rclcpp flatland_server flatland_msgs pluginlib geometry_msgs tf2 tf2_ros tf2_geometry_msgs yaml_cpp_vendor)
+-ament_package()
+ 
+ #############
+ ## Install ##
+ #############
+ 
+-pluginlib_export_plugin_description_file(flatland_plugins_lib plugin_description.xml)
++pluginlib_export_plugin_description_file(flatland_server plugin_description.xml)
+ 
+ install(
+   TARGETS flatland_plugins_lib
+@@ -160,3 +165,4 @@ if(BUILD_TESTING )
+ 
+ endif()
+ endif()
++ament_package()
+-- 
+2.43.0
+

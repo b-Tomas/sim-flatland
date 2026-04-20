@@ -1,0 +1,30 @@
+From 538f31a4c0086aa64e2be494a476b818b2011e73 Mon Sep 17 00:00:00 2001
+From: Flatland Patcher <patcher@openrobops.local>
+Date: Mon, 20 Apr 2026 08:57:33 -0300
+Subject: [PATCH 10/12] diff_drive: default-initialize twist_msg_ to avoid null
+ deref
+
+The BeforePhysicsStep callback dereferences twist_msg_ before a
+cmd_vel message has arrived, causing a null-pointer segfault on
+startup. Initialize it to an empty Twist so the first physics
+step sees zero velocity rather than crashing.
+---
+ flatland_plugins/include/flatland_plugins/diff_drive.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/flatland_plugins/include/flatland_plugins/diff_drive.h b/flatland_plugins/include/flatland_plugins/diff_drive.h
+index c762139..ca0d542 100644
+--- a/flatland_plugins/include/flatland_plugins/diff_drive.h
++++ b/flatland_plugins/include/flatland_plugins/diff_drive.h
+@@ -68,7 +68,7 @@ class DiffDrive : public flatland_server::ModelPlugin {
+   rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr ground_truth_pub_;
+   rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr twist_pub_;
+   Body* body_;
+-  geometry_msgs::msg::Twist::SharedPtr twist_msg_;
++  geometry_msgs::msg::Twist::SharedPtr twist_msg_ = std::make_shared<geometry_msgs::msg::Twist>();
+   nav_msgs::msg::Odometry odom_msg_;
+   nav_msgs::msg::Odometry ground_truth_msg_;
+   UpdateTimer update_timer_;
+-- 
+2.43.0
+

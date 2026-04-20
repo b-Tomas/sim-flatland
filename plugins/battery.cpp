@@ -1,11 +1,50 @@
 #include <flatland_plugins/battery.h>
 #include <flatland_server/yaml_reader.h>
 #include <pluginlib/class_list_macros.hpp>
+#include <algorithm>
+#include <cctype>
 #include <cmath>
+#include <limits>
+#include <optional>
+#include <sstream>
 
 using namespace flatland_server;
 
 namespace flatland_plugins {
+
+namespace {
+
+std::string ToLower(const std::string &s) {
+  std::string out(s);
+  std::transform(out.begin(), out.end(), out.begin(),
+                 [](unsigned char c) { return std::tolower(c); });
+  return out;
+}
+
+// Returns the id token immediately after the case-insensitive prefix
+// "Charger " in `name` (e.g. "Charger A (Office)" -> "A"), or
+// std::nullopt if the name doesn't begin with that prefix.
+std::optional<std::string> ExtractChargerId(const std::string &name) {
+  static const std::string kPrefix = "charger ";
+  if (name.size() <= kPrefix.size()) return std::nullopt;
+  for (size_t i = 0; i < kPrefix.size(); ++i) {
+    if (std::tolower(static_cast<unsigned char>(name[i])) != kPrefix[i]) {
+      return std::nullopt;
+    }
+  }
+  std::string id;
+  for (size_t i = kPrefix.size(); i < name.size(); ++i) {
+    char c = name[i];
+    if (std::isspace(static_cast<unsigned char>(c)) || c == '(' || c == ')') {
+      break;
+    }
+    id.push_back(c);
+  }
+  if (id.empty()) return std::nullopt;
+  return id;
+}
+
+}  // namespace
 
 void Battery::OnInitialize(const YAML::Node &config) {
   YamlReader reader(node_, config);
@@ -62,6 +101,9 @@ void Battery::OnInitialize(const YAML::Node &config) {
   auto latched_qos = rclcpp::QoS(1).transient_local();
   zone_marker_pub_ = node_->create_publisher<visualization_msgs::msg::MarkerArray>(
       GetModel()->NameSpaceTopic("charging_zones"), latched_qos);
+  // Absolute topic — same one RViz's 2D Goal Pose tool uses.
+  goal_pub_ = node_->create_publisher<geometry_msgs::msg::PoseStamped>(
+      "/goal_pose", 10);
 
   // Service: enable/disable charging manually
   set_charging_srv_ = node_->create_service<std_srvs::srv::SetBool>(
@@ -92,6 +134,43 @@ void Battery::OnInitialize(const YAML::Node &config) {
         RCLCPP_INFO(node_->get_logger(), "Battery: reset to full charge");
       });
 
+  // Topic command interface: std_msgs/String with a case-insensitive verb.
+  // Same semantics as the two services above, intended for UI integrations
+  // (e.g. InOrbit) that send simple string commands. Absolute topic so the
+  // InOrbit agent's global "custom command" channel reaches all models.
+  command_sub_ = node_->create_subscription<std_msgs::msg::String>(
+      "/inorbit/custom_command", 10,
+      [this](const std_msgs::msg::String::SharedPtr msg) {
+        std::string cmd = ToLower(msg->data);
+        if (cmd == "charge") {
+          charging_override_ = true;
+          RCLCPP_INFO(node_->get_logger(),
+                      "Battery: charging enabled via battery_command");
+        } else if (cmd == "discharge") {
+          charging_override_ = false;
+          RCLCPP_INFO(node_->get_logger(),
+                      "Battery: charging disabled via battery_command");
+        } else if (cmd == "reset") {
+          charge_ah_ = capacity_ah_;
+          depleted_ = false;
+          charging_override_ = false;
+          RCLCPP_INFO(node_->get_logger(),
+                      "Battery: reset to full charge via battery_command");
+        } else if (cmd == "dock") {
+          DispatchDock("");
+        } else if (cmd.rfind("dock=", 0) == 0) {
+          // Preserve caller casing in msg->data for warning output,
+          // DispatchDock lower-cases internally for matching.
+          DispatchDock(msg->data.substr(5));
+        } else {
+          RCLCPP_WARN(node_->get_logger(),
+                      "Battery: unknown battery_command '%s' "
+                      "(expected 'charge', 'discharge', 'reset', "
+                      "'dock', or 'dock={id}')",
+                      msg->data.c_str());
+        }
+      });
+
   RCLCPP_INFO(node_->get_logger(),
               "Battery plugin: capacity=%.1fAh voltage=%.1f-%.1fV "
               "base_current=%.2fA charge_current=%.2fA zones=%zu",
@@ -113,6 +192,70 @@ bool Battery::IsInChargingZone(double rx, double ry) const {
     }
   }
   return false;
+}
+
+bool Battery::DispatchDock(const std::string &id_or_empty) {
+  if (charging_zones_.empty()) {
+    RCLCPP_WARN(node_->get_logger(),
+                "Battery: dock requested but no charging_zones are configured");
+    return false;
+  }
+
+  const ChargingZone *target = nullptr;
+
+  if (id_or_empty.empty()) {
+    // Closest zone to current robot position.
+    b2Vec2 pos = body_->physics_body_->GetPosition();
+    double best = std::numeric_limits<double>::infinity();
+    for (const auto &z : charging_zones_) {
+      double dx = z.x - pos.x;
+      double dy = z.y - pos.y;
+      double d2 = dx * dx + dy * dy;
+      if (d2 < best) {
+        best = d2;
+        target = &z;
+      }
+    }
+  } else {
+    std::string wanted = ToLower(id_or_empty);
+    for (const auto &z : charging_zones_) {
+      auto extracted = ExtractChargerId(z.name);
+      if (extracted && ToLower(*extracted) == wanted) {
+        target = &z;
+        break;
+      }
+    }
+    if (target == nullptr) {
+      std::ostringstream known;
+      bool first = true;
+      for (const auto &z : charging_zones_) {
+        auto extracted = ExtractChargerId(z.name);
+        if (!extracted) continue;
+        if (!first) known << ", ";
+        known << *extracted;
+        first = false;
+      }
+      RCLCPP_WARN(node_->get_logger(),
+                  "Battery: dock id '%s' not found (available: %s)",
+                  id_or_empty.c_str(),
+                  first ? "<none>" : known.str().c_str());
+      return false;
+    }
+  }
+
+  geometry_msgs::msg::PoseStamped goal;
+  goal.header.frame_id = "map";
+  goal.header.stamp = node_->now();
+  goal.pose.position.x = target->x;
+  goal.pose.position.y = target->y;
+  goal.pose.position.z = 0.0;
+  goal.pose.orientation.w = 1.0;
+  goal_pub_->publish(goal);
+
+  RCLCPP_INFO(node_->get_logger(),
+              "Battery: dispatching dock to '%s' at (%.2f, %.2f)",
+              target->name.c_str(), target->x, target->y);
+  return true;
 }
 
 void Battery::BeforePhysicsStep(const Timekeeper &timekeeper) {

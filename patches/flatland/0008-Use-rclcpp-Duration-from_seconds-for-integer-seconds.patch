@@ -1,0 +1,30 @@
+From 5139433192550c4525fdbe0a9e2d8c9247c18e7e Mon Sep 17 00:00:00 2001
+From: Flatland Patcher <patcher@openrobops.local>
+Date: Mon, 20 Apr 2026 08:57:23 -0300
+Subject: [PATCH 08/12] Use rclcpp::Duration::from_seconds for integer-seconds
+ durations
+
+Jazzy's rclcpp::Duration(int) constructor now takes nanoseconds
+(int64_t), not seconds, so the previous usage silently produced
+a duration a billion times too short. Switch call sites to the
+explicit from_seconds() factory.
+---
+ flatland_plugins/src/update_timer.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/flatland_plugins/src/update_timer.cpp b/flatland_plugins/src/update_timer.cpp
+index bad5355..a02283f 100644
+--- a/flatland_plugins/src/update_timer.cpp
++++ b/flatland_plugins/src/update_timer.cpp
+@@ -50,7 +50,7 @@
+ namespace flatland_plugins {
+ 
+ UpdateTimer::UpdateTimer()
+-    : period_(rclcpp::Duration(0)), last_update_time_(rclcpp::Time(0, 0)) {}
++    : period_(rclcpp::Duration::from_seconds(0)), last_update_time_(rclcpp::Time(0, 0)) {}
+ 
+ void UpdateTimer::SetRate(double rate) {
+   if (rate == 0.0)
+-- 
+2.43.0
+

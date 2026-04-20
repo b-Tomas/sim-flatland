@@ -1,0 +1,27 @@
+From 79cc02256c9465dfe20a2b2a65ad2faf11eec50e Mon Sep 17 00:00:00 2001
+From: Flatland Patcher <patcher@openrobops.local>
+Date: Mon, 20 Apr 2026 08:57:30 -0300
+Subject: [PATCH 09/12] Fix plugin_description.xml library path for Jazzy
+ pluginlib
+
+Jazzy's pluginlib resolves library paths relative to the install
+tree's lib/ directory and adds the 'lib' prefix and platform
+suffix itself, so the path element should be just the logical
+library name ('flatland_plugins_lib').
+---
+ flatland_plugins/plugin_description.xml | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/flatland_plugins/plugin_description.xml b/flatland_plugins/plugin_description.xml
+index 7b9f985..4c79e5a 100644
+--- a/flatland_plugins/plugin_description.xml
++++ b/flatland_plugins/plugin_description.xml
+@@ -1,4 +1,4 @@
+-<library path="lib/libflatland_plugins_lib">
++<library path="flatland_plugins_lib">
+   <class type="flatland_plugins::Laser" base_class_type="flatland_server::ModelPlugin">
+     <description>Flatland laser plugin</description>
+   </class>
+-- 
+2.43.0
+

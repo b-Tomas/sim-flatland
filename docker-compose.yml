@@ -71,6 +71,7 @@ services:
     image: inorbitai/agent:ros-jazzy-4.33.0
     container_name: agent
     profiles: ["agent"]
+    hostname: flatland
     restart: always
     network_mode: host
     ipc: host

@@ -24,6 +24,7 @@ Docker environment for running the [avidbots/flatland](https://github.com/avidbo
 ### Build the image
 
 ```bash
+git submodule update --init        # first time only: fetch upstream flatland
 docker compose build
 ```
 
@@ -187,9 +188,19 @@ ros2 topic echo /battery_state
 
 # Manually enable charging
 ros2 service call /set_charging std_srvs/srv/SetBool '{data: true}'
+ros2 topic pub --once /inorbit/custom_command std_msgs/msg/String '{data: "charge"}'
+ros2 topic pub --once /inorbit/custom_command std_msgs/msg/String '{data: "discharge"}'
 
 # Reset battery to full
 ros2 service call /reset_battery std_srvs/srv/Trigger '{}'
+# or
+ros2 topic pub --once /inorbit/custom_command std_msgs/msg/String '{data: "reset"}'
+
+# Dock at the nearest charging zone
+ros2 topic pub --once /inorbit/custom_command std_msgs/msg/String '{data: "dock"}'
+
+# Dock at a specific charger by id (letter from the zone name, case-insensitive)
+ros2 topic pub --once /inorbit/custom_command std_msgs/msg/String '{data: "dock=A"}'
 ```
 
 ## InOrbit Agent
@@ -239,10 +250,61 @@ flatland/
   worlds/
     sample.world.yaml               # Flatland world definition
     turtlebot.model.yaml            # Robot model (DiffDrive + Laser + Battery + TF)
+  patches/
+    flatland/                       # Unified-diff patches applied to upstream flatland at build time
+      0001-*.patch ... 0012-*.patch # One patch per concern; 0011-0012 are project-specific
+  third_party/
+    flatland/                       # Git submodule -> avidbots/flatland @ pinned SHA
   local/                            # Bind-mounted into agent container (gitignored)
     agent.env.sh                    # InOrbit agent credentials (INORBIT_KEY, INORBIT_URL, ...) - gitignored
     agent.env.sh.example            # Template for agent.env.sh
 ```
+
+## Updating the flatland patches
+
+Upstream `avidbots/flatland` is tracked as a git submodule at
+`third_party/flatland`, pinned to a specific commit. Our edits
+for ROS2 Jazzy / Ubuntu 24.04 compatibility (plus battery plugin
+registration) live as unified-diff files in `patches/flatland/`,
+applied at image build time. `git apply` fails loudly if a patch
+no longer applies, so upstream drift cannot silently regress the
+build.
+
+The first ten patches are upstream-compat fixes (candidates for a
+PR to avidbots); `0011-*` and `0012-*` are project-specific
+registration of the battery plugin.
+
+### Editing a patch / adding a new one
+
+```bash
+cd third_party/flatland
+BASE=$(git rev-parse HEAD)
+git checkout -b work "$BASE"
+git am --whitespace=nowarn ../../patches/flatland/*.patch
+# ...edit code, git add, git commit (with a clear message -- it
+# becomes the patch filename and the top of the unified diff)...
+
+# Regenerate the patch stack
+rm ../../patches/flatland/*.patch
+git format-patch "$BASE"..HEAD -o ../../patches/flatland/
+cd ../..
+git add patches/flatland
+```
+
+### Bumping the upstream pin
+
+```bash
+cd third_party/flatland
+git fetch origin
+git checkout <new-sha>       # or origin/ros2 for the current tip
+cd ../..
+# Re-apply the stack against the new base and regenerate as above.
+# If git am rejects a hunk, resolve manually, commit, re-format-patch.
+git add third_party/flatland patches/flatland
+```
+
+When upstream merges one of the compat patches, just delete the
+corresponding file from `patches/flatland/`.
 
 ## ROS2 Topics
 
@@ -262,6 +324,26 @@ Key topics published by the simulation:
 | `/battery_marker` | `visualization_msgs/Marker` | Battery plugin (floating text for rviz) |
 | `/charging_zones` | `visualization_msgs/MarkerArray` | Battery plugin (zone circles and labels for rviz) |
 | `/local_costmap/published_footprint` | `geometry_msgs/PolygonStamped` | Nav2 costmap (robot footprint) |
+| `/inorbit/custom_data` | `std_msgs/String` | Republisher node (`battery_percentage`, `battery_voltage`, `estimated_time_remaining` as `key=value`) |
+
+### Sending a navigation goal
+
+Send a single-shot goal via topic — same topic RViz's **2D Goal Pose** tool publishes to:
+
+| Topic | Type | Subscriber |
+|-------|------|------------|
+| `/goal_pose` | `geometry_msgs/PoseStamped` | Nav2 `bt_navigator` (wraps into a `NavigateToPose` action internally) |
+
+```bash
+ros2 topic pub --once /goal_pose geometry_msgs/PoseStamped \
+  '{header: {frame_id: map}, pose: {position: {x: 7.0, y: 15.0, z: 0.0}, orientation: {w: 1.0}}}'
+```
+
+For full goal lifecycle (feedback, cancellation, result) use the action — what the RViz **Nav2 Goal** button and `ros2 action send_goal` use:
+
+| Action | Type | Server |
+|--------|------|--------|
+| `/navigate_to_pose` | `nav2_msgs/action/NavigateToPose` | Nav2 `bt_navigator` |
 
 ## Troubleshooting
 

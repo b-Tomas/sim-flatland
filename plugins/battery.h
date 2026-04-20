@@ -7,6 +7,7 @@
 #include <sensor_msgs/msg/battery_state.hpp>
 #include <visualization_msgs/msg/marker.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
+#include <std_msgs/msg/string.hpp>
 #include <std_srvs/srv/set_bool.hpp>
 #include <std_srvs/srv/trigger.hpp>
 #include <rclcpp/rclcpp.hpp>
@@ -35,6 +36,7 @@ class Battery : public flatland_server::ModelPlugin {
 
   rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr set_charging_srv_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr reset_battery_srv_;
+  rclcpp::Subscription<std_msgs::msg::String>::SharedPtr command_sub_;
 
   double capacity_ah_;
   double voltage_full_;

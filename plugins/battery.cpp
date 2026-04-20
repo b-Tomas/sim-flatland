@@ -1,6 +1,8 @@
 #include <flatland_plugins/battery.h>
 #include <flatland_server/yaml_reader.h>
 #include <pluginlib/class_list_macros.hpp>
+#include <algorithm>
+#include <cctype>
 #include <cmath>
 
 using namespace flatland_server;
@@ -90,6 +92,38 @@ void Battery::OnInitialize(const YAML::Node &config) {
         res->success = true;
         res->message = "Battery reset to 100%";
         RCLCPP_INFO(node_->get_logger(), "Battery: reset to full charge");
+      });
+
+  // Topic command interface: std_msgs/String with a case-insensitive verb.
+  // Same semantics as the two services above, intended for UI integrations
+  // (e.g. InOrbit) that send simple string commands. Absolute topic so the
+  // InOrbit agent's global "custom command" channel reaches all models.
+  command_sub_ = node_->create_subscription<std_msgs::msg::String>(
+      "/inorbit/custom_command", 10,
+      [this](const std_msgs::msg::String::SharedPtr msg) {
+        std::string cmd = msg->data;
+        std::transform(cmd.begin(), cmd.end(), cmd.begin(),
+                       [](unsigned char c) { return std::tolower(c); });
+        if (cmd == "charge") {
+          charging_override_ = true;
+          RCLCPP_INFO(node_->get_logger(),
+                      "Battery: charging enabled via battery_command");
+        } else if (cmd == "discharge") {
+          charging_override_ = false;
+          RCLCPP_INFO(node_->get_logger(),
+                      "Battery: charging disabled via battery_command");
+        } else if (cmd == "reset") {
+          charge_ah_ = capacity_ah_;
+          depleted_ = false;
+          charging_override_ = false;
+          RCLCPP_INFO(node_->get_logger(),
+                      "Battery: reset to full charge via battery_command");
+        } else {
+          RCLCPP_WARN(node_->get_logger(),
+                      "Battery: unknown battery_command '%s' "
+                      "(expected 'charge', 'discharge', or 'reset')",
+                      msg->data.c_str());
+        }
       });
 
   RCLCPP_INFO(node_->get_logger(),

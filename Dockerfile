@@ -51,6 +51,9 @@ RUN cd /ros2_ws/src/flatland && \
 COPY plugins/battery.h /ros2_ws/src/flatland/flatland_plugins/include/flatland_plugins/
 COPY plugins/battery.cpp /ros2_ws/src/flatland/flatland_plugins/src/
 
+# Copy project-owned republisher package
+COPY republisher/ /ros2_ws/src/republisher/
+
 # Install rosdep dependencies and build flatland
 # Skip flatland_viz (rviz2 alone handles visualization)
 RUN cd /ros2_ws && \
@@ -58,7 +61,7 @@ RUN cd /ros2_ws && \
     (rosdep install --from-paths src --ignore-src -r -y || true) && \
     colcon build --symlink-install \
       --cmake-args -DCMAKE_BUILD_TYPE=Release \
-      --packages-select flatland_msgs flatland_server flatland_plugins
+      --packages-select flatland_msgs flatland_server flatland_plugins republisher
 
 # Copy project files
 COPY launch/ /ros2_ws/src/flatland_nav2_bringup/launch/

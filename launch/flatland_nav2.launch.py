@@ -148,6 +148,15 @@ def generate_launch_description():
         parameters=[configured_params],
     )
 
+    # Republishes selected simulation data (battery, ETA) to /inorbit/custom_data
+    republisher = Node(
+        package='republisher',
+        executable='republisher',
+        name='republisher',
+        output='screen',
+        parameters=[{'use_sim_time': use_sim_time}],
+    )
+
     # Lifecycle manager for navigation nodes
     lifecycle_manager_navigation = Node(
         package='nav2_lifecycle_manager',
@@ -199,5 +208,6 @@ def generate_launch_description():
         velocity_smoother,
         smoother_server,
         lifecycle_manager_navigation,
+        republisher,
         rviz_node,
     ])

@@ -188,9 +188,13 @@ ros2 topic echo /battery_state
 
 # Manually enable charging
 ros2 service call /set_charging std_srvs/srv/SetBool '{data: true}'
+ros2 topic pub --once /inorbit/custom_command std_msgs/msg/String '{data: "charge"}'
+ros2 topic pub --once /inorbit/custom_command std_msgs/msg/String '{data: "discharge"}'
 
 # Reset battery to full
 ros2 service call /reset_battery std_srvs/srv/Trigger '{}'
+# or
+ros2 topic pub --once /inorbit/custom_command std_msgs/msg/String '{data: "reset"}'
 ```
 
 ## InOrbit Agent
@@ -314,6 +318,26 @@ Key topics published by the simulation:
 | `/battery_marker` | `visualization_msgs/Marker` | Battery plugin (floating text for rviz) |
 | `/charging_zones` | `visualization_msgs/MarkerArray` | Battery plugin (zone circles and labels for rviz) |
 | `/local_costmap/published_footprint` | `geometry_msgs/PolygonStamped` | Nav2 costmap (robot footprint) |
+| `/inorbit/custom_data` | `std_msgs/String` | Republisher node (`battery_percentage`, `battery_voltage`, `estimated_time_remaining` as `key=value`) |
+
+### Sending a navigation goal
+
+Send a single-shot goal via topic — same topic RViz's **2D Goal Pose** tool publishes to:
+
+| Topic | Type | Subscriber |
+|-------|------|------------|
+| `/goal_pose` | `geometry_msgs/PoseStamped` | Nav2 `bt_navigator` (wraps into a `NavigateToPose` action internally) |
+
+```bash
+ros2 topic pub --once /goal_pose geometry_msgs/PoseStamped \
+  '{header: {frame_id: map}, pose: {position: {x: 7.0, y: 15.0, z: 0.0}, orientation: {w: 1.0}}}'
+```
+
+For full goal lifecycle (feedback, cancellation, result) use the action — what the RViz **Nav2 Goal** button and `ros2 action send_goal` use:
+
+| Action | Type | Server |
+|--------|------|--------|
+| `/navigate_to_pose` | `nav2_msgs/action/NavigateToPose` | Nav2 `bt_navigator` |
 
 ## Troubleshooting
 

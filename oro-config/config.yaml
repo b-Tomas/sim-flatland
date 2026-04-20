@@ -1,0 +1,166 @@
+################################ DataSourceDefinition #################################
+apiVersion: v0.1
+kind: DataSourceDefinition
+metadata:
+  id: batteryPercentage
+  scope: ""
+spec:
+  label: Battery Percentage
+  source:
+    keyValue:
+      key: "battery_percentage"
+---
+apiVersion: v0.1
+kind: DataSourceDefinition
+metadata:
+  id: batteryVoltage
+  scope: ""
+spec:
+  label: Battery Voltage
+  source:
+    keyValue:
+      key: "battery_voltage"
+---
+################################ DashboardDefinition #################################
+apiVersion: v0.1
+kind: DashboardDefinition
+metadata:
+  id: robot
+  scope: ''
+spec:
+  label: Robot
+  order: 2
+  sections:
+  - label: Health
+    scope: robot
+    widgets:
+    - config:
+        dataSources:
+        - id: cpuLoadPercentage
+          label: CPU usage
+          type: gauge
+          unit: '%'
+        - id: diskUsagePercentage
+          label: Disk usage
+          type: gauge
+          unit: '%'
+        - id: batteryPercentage
+          label: Battery
+          type: gauge
+          unit: '%'
+        - id: networkOroRate
+          label: Agent network rate
+          type: gauge
+          unit: kbps
+      label: Vitals
+      layout:
+        chroma: true
+        grid: 4
+        height: 1
+      type: vitals
+    - config: {}
+      label: Actions
+      layout:
+        chroma: true
+        grid: 4
+        height: 1
+      type: actionsWidget
+    - label: Key Value pairs
+      layout:
+        chroma: true
+        grid: 4
+        height: 1
+      type: keyValues
+    withControlWidget: false
+
+################################ ActionDefinition #################################
+---
+apiVersion: v0.1
+kind: ActionDefinition
+metadata:
+  id: BatteryReset
+  scope: ''
+spec:
+  label: Reset
+  group: Battery
+  type: PublishToTopic
+  arguments:
+  - name: message
+    value: reset
+  description: 'Reset battery to 100%'
+  lock: true
+---
+apiVersion: v0.1
+kind: ActionDefinition
+metadata:
+  id: BatteryDischarge
+  scope: ''
+spec:
+  label: Discharging
+  group: Battery
+  type: PublishToTopic
+  arguments:
+  - name: message
+    value: discharge
+  description: 'Start discharging'
+  lock: true
+---
+apiVersion: v0.1
+kind: ActionDefinition
+metadata:
+  id: BatteryCharge
+  scope: ''
+spec:
+  label: Charging
+  group: Battery
+  type: PublishToTopic
+  arguments:
+  - name: message
+    value: charge
+  description: 'Start charging'
+  lock: true    
+---
+apiVersion: v0.1
+kind: ActionDefinition
+metadata:
+  id: DockAuto
+  scope: ''
+spec:
+  label: Dock (nearest)
+  group: Dock
+  type: PublishToTopic
+  arguments:
+  - name: message
+    value: dock
+  description: 'Go to nearest charger'
+  lock: true      
+---
+apiVersion: v0.1
+kind: ActionDefinition
+metadata:
+  id: DockA
+  scope: ''
+spec:
+  label: Dock A
+  group: Dock
+  type: PublishToTopic
+  arguments:
+  - name: message
+    value: dock=A
+  description: 'Go to Charger A'
+  lock: true      
+---
+apiVersion: v0.1
+kind: ActionDefinition
+metadata:
+  id: DockD
+  scope: ''
+spec:
+  label: Dock D
+  group: Dock
+  type: PublishToTopic
+  arguments:
+  - name: message
+    value: dock=D
+  description: 'To to Charger D'
+  lock: true      

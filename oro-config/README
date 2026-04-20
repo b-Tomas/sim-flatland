@@ -1,0 +1,9 @@
+# OpenRobOps configs
+
+This folder contains YAML files that need to be applied to OpenRobOps to configure data sources, 
+actions and other settings in OpenRobOps specific to this flatland simulation.
+
+Note: To apply configs, use InOrbit's CLI. First set up `INORBIT_API_KEY` environment variable, then:
+```
+inorbit apply -f config.yaml
+```

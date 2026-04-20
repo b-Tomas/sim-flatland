@@ -7,6 +7,7 @@
 #include <sensor_msgs/msg/battery_state.hpp>
 #include <visualization_msgs/msg/marker.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
+#include <geometry_msgs/msg/pose_stamped.hpp>
 #include <std_msgs/msg/string.hpp>
 #include <std_srvs/srv/set_bool.hpp>
 #include <std_srvs/srv/trigger.hpp>
@@ -27,12 +28,17 @@ class Battery : public flatland_server::ModelPlugin {
 
  private:
   bool IsInChargingZone(double rx, double ry) const;
+  // Dispatches a nav goal to a charging zone. id_or_empty == "" means
+  // closest zone; otherwise the zone whose "Charger X" letter matches
+  // (case-insensitive). Returns false if no zone was selected.
+  bool DispatchDock(const std::string &id_or_empty);
 
   flatland_server::Body *body_;
   UpdateTimer update_timer_;
   rclcpp::Publisher<sensor_msgs::msg::BatteryState>::SharedPtr pub_;
   rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr marker_pub_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr zone_marker_pub_;
+  rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr goal_pub_;
 
   rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr set_charging_srv_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr reset_battery_srv_;

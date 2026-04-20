@@ -195,6 +195,12 @@ ros2 topic pub --once /inorbit/custom_command std_msgs/msg/String '{data: "disch
 ros2 service call /reset_battery std_srvs/srv/Trigger '{}'
 # or
 ros2 topic pub --once /inorbit/custom_command std_msgs/msg/String '{data: "reset"}'
+
+# Dock at the nearest charging zone
+ros2 topic pub --once /inorbit/custom_command std_msgs/msg/String '{data: "dock"}'
+
+# Dock at a specific charger by id (letter from the zone name, case-insensitive)
+ros2 topic pub --once /inorbit/custom_command std_msgs/msg/String '{data: "dock=A"}'
 ```
 
 ## InOrbit Agent

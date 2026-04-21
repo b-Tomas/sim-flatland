@@ -71,7 +71,7 @@ spec:
         grid: 4
         height: 1
       type: keyValues
-    withControlWidget: false
+    withControlWidget: true
 
 ################################ ActionDefinition #################################
 ---

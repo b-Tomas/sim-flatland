@@ -25,6 +25,70 @@ spec:
 apiVersion: v0.1
 kind: DashboardDefinition
 metadata:
+  id: welcome
+  scope: ''
+spec:
+  label: Welcome
+  order: 0
+  sections:
+  - label: ''
+    scope: robot
+    withControlWidget: false
+    widgets:
+    - type: text
+      label: Guide
+      config: 
+        text: |
+          # OpenRobOps
+
+          Welcome to your first OpenRobOps dashboard.
+
+          OpenRobOps (ORO) is an open-source robot fleet management and operations platform. 
+          It provides real-time observability, monitoring, and control for autonomous mobile robots (AMRs) — fully self-hostable, with native support for ROS and Open RMF.
+          Learn more on [https://openrobops.org/](https://openrobops.org/).
+          
+          ## Dashboards
+
+          This demonstration instance is set up with a simulated robots you can monitor and operate through the widgets provided in these dashboards:
+           - [Fleet](/dashboards/fleet): Overview of all robots in the fleet, their status and fleet-level diagnostics
+           - [Robot](/dashboards/robot): Detailed view of a single robot, including its health, telemetry, reported data, and actions
+           - [Navigation](/dashboards/navigation): Real-time navigation status and controls
+
+          ## Simulation
+
+          The simulated robot `flatland-sim` is a simple 2D simulation running [ROS2](https://www.ros.org/). 
+          It implements the [Flatland](https://github.com/avidbots/flatland) simulator and the [Nav2](https://github.com/ros-planning/navigation2) navigation stack,
+          providing a realistic simulation of the robot's behavior and navigation. 
+          It also implements a battery plugin that simulates the robot's battery state, which drains rather quickly for demo purposes, and recharges when
+          the robot enters a charging zone.
+
+
+          The map consists of four offices and a central corridor. 
+          There are two charging zones, in offices "A" (top-left) and "D" (bottom-right). 
+
+          Currently the robot accepts the following commands:
+          - Dock:
+            - **Dock A**, **Dock D**: Navigates to the charging zones in office "A" or "D" respectively.
+            - **Dock (nearest)**: Goes to the nearest charging zone.
+          - Battery:
+            - **Reset** Replaces the battery to 100%.
+            - **Charging** and **Discharging** toggles the charging state.
+
+          Additionally, the robot reports key-value pairs as custom data elements, including `battery_percentage` and `battery_voltage` for battery
+          state, and  `estimated_time_remaining` from the nav2 stack. These are added to other built-in attributes implemented by the agent 
+          such as CPU usage, disk usage, network rate, etc.
+
+          This simulation is available on [Github](https://github.com/OpenRobOps/sim-flatland) to be used as a ready-to-run docker environment
+          which includes the ORO agent as a sidecar, ready to connect to OpenRobOps.
+
+      layout:
+        chroma: false
+        grid: 12
+        height: 3
+---    
+apiVersion: v0.1
+kind: DashboardDefinition
+metadata:
   id: robot
   scope: ''
 spec:
@@ -134,6 +198,8 @@ spec:
     value: dock
   description: 'Go to nearest charger'
   lock: true      
+  widgets:
+  - navigation
 ---
 apiVersion: v0.1
 kind: ActionDefinition
@@ -149,6 +215,8 @@ spec:
     value: dock=A
   description: 'Go to Charger A'
   lock: true      
+  widgets:
+  - navigation
 ---
 apiVersion: v0.1
 kind: ActionDefinition
@@ -164,3 +232,5 @@ spec:
     value: dock=D
   description: 'To to Charger D'
   lock: true      
+  widgets:
+  - navigation

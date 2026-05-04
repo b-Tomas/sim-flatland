@@ -77,5 +77,10 @@ WORKDIR /ros2_ws
 ENV DISPLAY=:0
 ENV QT_X11_NO_MITSHM=1
 
+# Github artifacts
+LABEL org.opencontainers.image.source=https://github.com/OpenRobOps/sim-flatland
+LABEL org.opencontainers.image.description="ROS2 Flatland simulation"
+LABEL org.opencontainers.image.licenses=Apache-V2
+
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["--with-rviz"]

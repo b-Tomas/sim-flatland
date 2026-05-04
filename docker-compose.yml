@@ -1,7 +1,7 @@
 services:
   flatland-nav2:
     build: .
-    image: flatland-nav2:jazzy
+    image: ghcr.io/openrobops/flatland-nav2:latest
     container_name: flatland_nav2
     environment:
       - DISPLAY=${DISPLAY:-:0}
@@ -37,7 +37,7 @@ services:
 
   # Run rviz in a separate container (activate with: docker compose --profile rviz-separate up rviz)
   rviz:
-    image: flatland-nav2:jazzy
+    image: ghcr.io/openrobops/flatland-nav2:latest
     container_name: flatland_rviz
     profiles: ["rviz-separate"]
     environment:

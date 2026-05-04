@@ -1,0 +1,29 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Flatland Patcher <patcher@openrobops.local>
+Date: Sun, 04 May 2026 00:00:00 -0300
+Subject: [PATCH 13/13] simulation_manager: throttle utilization log to 60s
+
+The cycle utilization line was logged once per second, which is
+noisy in container logs for long-running simulations. Throttle it
+to once per minute -- the running min/max/avg already smooth over
+the full window so per-second granularity is unnecessary.
+---
+ flatland_server/src/simulation_manager.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/flatland_server/src/simulation_manager.cpp b/flatland_server/src/simulation_manager.cpp
+index c0b3934..a8917ae 100644
+--- a/flatland_server/src/simulation_manager.cpp
++++ b/flatland_server/src/simulation_manager.cpp
+@@ -138,7 +138,7 @@ void SimulationManager::Main() {
+     filtered_cycle_util = 0.99 * filtered_cycle_util + 0.01 * cycle_util;
+
+     RCLCPP_INFO_THROTTLE(rclcpp::get_logger("SimMan"), wall_clock,
+-         1000,
++         60000,
+         "utilization: min %.1f%% max %.1f%% ave %.1f%%  factor: %.1f",
+         min_cycle_util, max_cycle_util, filtered_cycle_util, factor);
+   }
+--
+2.43.0
+

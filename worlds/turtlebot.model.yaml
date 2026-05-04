@@ -29,8 +29,8 @@ plugins:
     topic: scan
     broadcast_tf: true
     origin: [0, 0, 0]
-    range: 10.0
-    angle: {min: -3.14159, max: 3.14159, increment: 0.01745}
+    range: 8.0
+    angle: {min: -2.18166, max: 2.18166, increment: 0.01745}
     noise_std_dev: 0.01
     update_rate: 10.0
 

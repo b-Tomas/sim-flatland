@@ -21,6 +21,17 @@ spec:
     keyValue:
       key: "battery_voltage"
 ---
+apiVersion: v0.1
+kind: DataSourceDefinition
+metadata:
+  id: batteryCharging
+  scope: ""
+spec:
+  label: Battery Voltage
+  source:
+    keyValue:
+      key: "battery_charging"
+---
 ################################ DashboardDefinition #################################
 apiVersion: v0.1
 kind: DashboardDefinition
@@ -96,6 +107,7 @@ spec:
   order: 2
   sections:
   - label: Health
+    withControlWidget: true
     scope: robot
     widgets:
     - config:
@@ -129,14 +141,70 @@ spec:
         grid: 4
         height: 1
       type: actionsWidget
-    - label: Key Value pairs
+    - label: Data Sources
+      type: listData
       layout:
         chroma: true
         grid: 4
         height: 1
+      config:
+        dataSources:
+        - id: batteryCharging
+          label: Charging state
+          type: boolean
+        - id: batteryVoltage
+          label: Battery voltage (V)
+          unit: V
+          type: text
+        - id: batteryPercentage
+          label: Battery percentage
+          unit: "%"
+          type: text
+    - label: Key Value pairs
       type: keyValues
+      layout:
+        chroma: true
+        grid: 4
+        height: 1
+---
+apiVersion: v0.1
+kind: DashboardDefinition
+metadata:
+  id: navigation
+  scope: ''
+spec:
+  label: Navigation
+  order: 3
+  sections:
+  - label: Robot Navigation
+    withControlWidget: false
+    scope: navigation
+    widgets:
+    - label: Navigation
+      layout:
+        grid: 12
+        height: 2
+      type: navigation
     withControlWidget: true
-
+  - label: Details
+    scope: robot
+    widgets:
+    - label: Vitals
+      config:
+        dataSources:
+        - id: cpuLoadPercentage
+          label: CPU usage
+          type: gauge
+          unit: '%'
+        - id: batteryPercentage
+          label: Battery
+          type: gauge
+          unit: '%'
+      layout:
+        chroma: true
+        grid: 4
+        height: 1
+      type: vitals
 ################################ ActionDefinition #################################
 ---
 apiVersion: v0.1

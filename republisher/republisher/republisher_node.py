@@ -29,6 +29,8 @@ class Republisher(Node):
     def _on_battery(self, msg: BatteryState):
         self._publish_kv('battery_percentage', msg.percentage)
         self._publish_kv('battery_voltage', msg.voltage)
+        charging = msg.power_supply_status == BatteryState.POWER_SUPPLY_STATUS_CHARGING
+        self._publish_kv('battery_charging', 'true' if charging else 'false')
 
     def _on_nav_feedback(self, msg):
         eta = msg.feedback.estimated_time_remaining

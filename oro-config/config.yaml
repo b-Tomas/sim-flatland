@@ -1,4 +1,6 @@
-################################ DataSourceDefinition #################################
+#######################################################################################
+## DataSourceDefinition                             
+#######################################################################################
 apiVersion: v0.1
 kind: DataSourceDefinition
 metadata:
@@ -34,7 +36,9 @@ spec:
     keyValue:
       key: "battery_charging"
 ---
-################################ DashboardDefinition #################################
+#######################################################################################
+## DashboardDefinition
+#######################################################################################
 apiVersion: v0.1
 kind: DashboardDefinition
 metadata:
@@ -250,8 +254,10 @@ spec:
         grid: 4
         height: 1
       type: vitals
-################################ ActionDefinition #################################
 ---
+#######################################################################################
+## ActionDefinition
+#######################################################################################
 apiVersion: v0.1
 kind: ActionDefinition
 metadata:
@@ -347,3 +353,38 @@ spec:
   lock: true      
   widgets:
   - navigation
+---
+#######################################################################################
+## ModuleState
+#######################################################################################
+# CustomDataAgentlet: Startup defaults are fine
+# RosMapAgentlet, RosPoseAgentlet: Startup defaults are fine (just runlevel)
+# RosImageAgentlet: Startup defaults should be fine (to be tested - flatland does not have images)
+# RosLocalizationAgentlet: This is where most flatland topics need to be configured. Also enable it by default, runLevel 5 (it is the default, don't forget to keep this setting)
+apiVersion: v0.1
+kind: ModuleState
+metadata:
+  id: RosLocalizationAgentlet
+  scope: ''
+spec:
+  state:
+    minRunlevel: 5
+    map_topic: "map"
+    nav_goal_topic: "goal_pose"
+    laser_topic: "scan"
+    costmap_topic: "local_costmap/costmap"
+    set_pose_topic: "flatland_0/initialpose"
+    path_topics: 
+     "0": { "topic": "plan"}
+---
+# RosTeleopAgentlet: Set the cmd_vel topic
+apiVersion: v0.1
+kind: ModuleState
+metadata:
+  id: RosTeleopAgentlet
+  scope: ''
+spec:
+  state:
+    publish_zero_vel: true
+    cmd_vel_topic: "flatland_0/cmd_vel"
+

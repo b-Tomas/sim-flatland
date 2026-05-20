@@ -157,13 +157,15 @@ def generate_launch_description():
         parameters=[{'use_sim_time': use_sim_time}],
     )
 
-    # Diagnostics watcher node — publishes /diagnostics for sim health
+    # Diagnostics watcher node — publishes /diagnostics for sim health.
+    # use_sim_time is intentionally left off: the watcher's freshness and
+    # presence checks only need wall-clock time, and subscribing to /clock
+    # at the sim step rate (200 Hz) is the dominant CPU cost for this node.
     diagnostics_watcher = Node(
         package='diagnostics_watcher',
         executable='watcher',
         name='diagnostics_watcher',
         output='screen',
-        parameters=[{'use_sim_time': use_sim_time}],
     )
 
     # Aggregator — republishes /diagnostics_agg grouped by Sensors/Power/Navigation

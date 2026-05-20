@@ -316,8 +316,8 @@ A `diagnostics_watcher` node publishes ROS 2 diagnostics on `/diagnostics`, and 
 | Check | Trigger |
 |-------|---------|
 | `scan_freshness` | `/scan` not received for > 2 s (ERROR), or rate < 5 Hz (WARN) |
-| `odom_freshness` | `/odom` not received for > 1 s (ERROR) |
-| `tf_map_to_base_link` | `map → base_link` lookup fails or stamp > 2 s old (ERROR) |
+| `odom_publishers` | No publisher on `/odom` (ERROR) |
+| `tf_broadcasters` | No publisher on `/tf` (ERROR) |
 | `battery` | SOC ≤ 5% or message stale > 5 s (ERROR); SOC ≤ 20% (WARN); NaN percentage (WARN) |
 | `cmd_vel_freshness` | `/cmd_vel` not received for > 5 s (WARN only — the robot is idle when no goal is active) |
 | `nav2_lifecycle` | Any of `map_server`, `amcl`, `controller_server`, `planner_server`, `bt_navigator` not in state `active` (ERROR) |
@@ -351,7 +351,7 @@ ros2 param set /diagnostics_watcher scan_stale_sec 5.0
 ros2 param set /diagnostics_watcher battery_warn_soc 0.30
 ```
 
-The full list (`scan_stale_sec`, `odom_stale_sec`, `cmd_vel_stale_sec`, `battery_stale_sec`, `tf_stale_sec`, `battery_warn_soc`, `battery_critical_soc`, `nav2_nodes`, `update_rate_hz`, `startup_grace_sec`) lives in `diagnostics_watcher/diagnostics_watcher/watcher_node.py`.
+The full list (`scan_stale_sec`, `cmd_vel_stale_sec`, `battery_stale_sec`, `battery_warn_soc`, `battery_critical_soc`, `nav2_nodes`, `update_rate_hz`, `startup_grace_sec`) lives in `diagnostics_watcher/diagnostics_watcher/watcher_node.py`.
 
 ### Disabling
 

@@ -4,17 +4,14 @@ from collections import deque
 from typing import Optional
 
 import rclpy
-import rclpy.time
 from rclpy.node import Node
 from rclpy.duration import Duration
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 from diagnostic_updater import Updater
 
 from sensor_msgs.msg import BatteryState, LaserScan
-from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Twist
 from diagnostic_msgs.msg import DiagnosticStatus
-from tf2_ros import Buffer, TransformListener, TransformException
 from lifecycle_msgs.srv import GetState
 
 from .status_logic import classify_battery, classify_freshness
@@ -51,10 +48,8 @@ class DiagnosticsWatcher(Node):
         self.declare_parameter('battery_topic', '/battery_state')
 
         self.declare_parameter('scan_stale_sec', 2.0)
-        self.declare_parameter('odom_stale_sec', 1.0)
         self.declare_parameter('cmd_vel_stale_sec', 5.0)
         self.declare_parameter('battery_stale_sec', 5.0)
-        self.declare_parameter('tf_stale_sec', 2.0)
 
         self.declare_parameter('battery_warn_soc', 0.20)
         self.declare_parameter('battery_critical_soc', 0.05)
@@ -73,7 +68,6 @@ class DiagnosticsWatcher(Node):
         # --- Last-seen timestamps ------------------------------------------
         self._last_scan = None
         self._scan_timestamps: deque = deque()
-        self._last_odom = None
         self._last_cmd_vel = None
         self._last_battery_ts = None
         self._last_battery_percentage: Optional[float] = None
@@ -89,12 +83,10 @@ class DiagnosticsWatcher(Node):
             self._on_scan,
             _best_effort_qos(),
         )
-        self.create_subscription(
-            Odometry,
-            self.get_parameter('odom_topic').value,
-            self._on_odom,
-            10,
-        )
+        # /odom and /tf are intentionally NOT subscribed: at 200 Hz each they
+        # dominate this node's CPU, and freshness here only needs to confirm
+        # *something* is publishing — done via count_publishers() in the diag
+        # tasks below.
         self.create_subscription(
             Twist,
             self.get_parameter('cmd_vel_topic').value,
@@ -107,10 +99,6 @@ class DiagnosticsWatcher(Node):
             self._on_battery,
             10,
         )
-
-        # --- TF listener for map -> base_link ------------------------------
-        self._tf_buffer = Buffer(node=self)
-        self._tf_listener = TransformListener(self._tf_buffer, self)
 
         # --- Nav2 lifecycle polling ----------------------------------------
         self._nav2_nodes = list(self.get_parameter('nav2_nodes').value)
@@ -132,10 +120,10 @@ class DiagnosticsWatcher(Node):
         # Cancel the Updater's built-in 1 Hz timer; we drive it explicitly below.
         self._updater.timer.cancel()
         self._updater.add('scan_freshness', self._diag_scan)
-        self._updater.add('odom_freshness', self._diag_odom)
+        self._updater.add('odom_publishers', self._diag_odom)
         self._updater.add('cmd_vel_freshness', self._diag_cmd_vel)
         self._updater.add('battery', self._diag_battery)
-        self._updater.add('tf_map_to_base_link', self._diag_tf)
+        self._updater.add('tf_broadcasters', self._diag_tf)
         self._updater.add('nav2_lifecycle', self._diag_nav2_lifecycle)
 
         period = 1.0 / float(self.get_parameter('update_rate_hz').value)
@@ -149,9 +137,6 @@ class DiagnosticsWatcher(Node):
         window = Duration(seconds=1.0)
         while self._scan_timestamps and (now - self._scan_timestamps[0]) > window:
             self._scan_timestamps.popleft()
-
-    def _on_odom(self, _msg):
-        self._last_odom = self.get_clock().now()
 
     def _on_cmd_vel(self, _msg):
         self._last_cmd_vel = self.get_clock().now()
@@ -191,12 +176,14 @@ class DiagnosticsWatcher(Node):
         return stat
 
     def _diag_odom(self, stat):
-        level, msg = classify_freshness(
-            self._age_sec(self._last_odom),
-            float(self.get_parameter('odom_stale_sec').value),
-            self._grace_active(),
-        )
-        stat.summary(level, msg)
+        topic = self.get_parameter('odom_topic').value
+        n = self.count_publishers(topic)
+        if n > 0:
+            stat.summary(DiagnosticStatus.OK, f'{n} publisher(s) on {topic}')
+        elif self._grace_active():
+            stat.summary(DiagnosticStatus.STALE, f'no publisher on {topic} yet')
+        else:
+            stat.summary(DiagnosticStatus.ERROR, f'no publisher on {topic}')
         return stat
 
     def _diag_cmd_vel(self, stat):
@@ -225,32 +212,13 @@ class DiagnosticsWatcher(Node):
         return stat
 
     def _diag_tf(self, stat):
-        stale_sec = float(self.get_parameter('tf_stale_sec').value)
-        try:
-            tf = self._tf_buffer.lookup_transform(
-                'map', 'base_link', rclpy.time.Time())
-        except TransformException as ex:
-            if self._grace_active():
-                stat.summary(DiagnosticStatus.STALE, f'no map->base_link yet: {ex}')
-            else:
-                stat.summary(DiagnosticStatus.ERROR, f'map->base_link lookup failed: {ex}')
-            return stat
-
-        stamp = rclpy.time.Time.from_msg(tf.header.stamp)
-        age_sec = (self.get_clock().now() - stamp).nanoseconds / 1e9
-        if age_sec < 0:
-            stat.summary(
-                DiagnosticStatus.WARN,
-                f'map->base_link stamp is in the future ({age_sec:.2f}s) — '
-                f'possible clock mismatch (check use_sim_time on broadcasters)',
-            )
-        elif age_sec > stale_sec:
-            stat.summary(
-                DiagnosticStatus.ERROR,
-                f'map->base_link stale ({age_sec:.2f}s, threshold {stale_sec:.2f}s)',
-            )
+        n = self.count_publishers('/tf')
+        if n > 0:
+            stat.summary(DiagnosticStatus.OK, f'{n} /tf broadcaster(s)')
+        elif self._grace_active():
+            stat.summary(DiagnosticStatus.STALE, 'no /tf broadcasters yet')
         else:
-            stat.summary(DiagnosticStatus.OK, f'map->base_link fresh ({age_sec:.2f}s)')
+            stat.summary(DiagnosticStatus.ERROR, 'no /tf broadcasters')
         return stat
 
     def _poll_lifecycle(self):

@@ -204,6 +204,84 @@ ros2 topic pub --once /inorbit/custom_command std_msgs/msg/String '{data: "dock"
 ros2 topic pub --once /inorbit/custom_command std_msgs/msg/String '{data: "dock=A"}'
 ```
 
+## Camera Simulation
+
+The robot includes a synthetic forward-facing camera that renders a Wolfenstein
+3D-style image of the 2D world using one Box2D raycast per image column.
+The image is depth-shaded, with a solid sky and floor split at the horizon.
+
+### Viewing the image
+
+The camera publishes to ROS topics regardless of whether anyone is watching;
+to see the rendered frame in a window, run `rqt_image_view` from inside the
+container. As with rviz, the host must first authorize X access:
+
+```bash
+# On the host (once per login session — same step rviz needs)
+xhost +local:docker
+
+# In another terminal, with `docker compose up` already running
+docker compose exec flatland-nav2 bash -lc '
+  source /opt/ros/jazzy/setup.bash &&
+  source /ros2_ws/install/setup.bash &&
+  ros2 run rqt_image_view rqt_image_view /image_raw'
+```
+
+An `rviz_default_plugins/Image` display is **not** added to the default rviz
+layout: that display's render-to-texture path crashes rviz on some OpenGL /
+OGRE setups commonly seen in containerized environments. To try it in rviz
+anyway, click *Add* → *By topic* → `/image_raw` → *Image* in a running rviz
+session; if rviz survives, save the layout.
+
+### Configuration
+
+Parameters in `worlds/turtlebot.model.yaml` (all optional — defaults shown):
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `width` | 320 | Image width in pixels |
+| `height` | 240 | Image height in pixels |
+| `fov_deg` | 90.0 | Horizontal field of view (degrees) |
+| `range` | 8.0 | Max ray distance in meters |
+| `update_rate` | 10.0 | Publish rate in Hz |
+| `origin` | `[0, 0, 0]` | Camera mount offset `[x, y, theta]` relative to body |
+| `layers` | `["all"]` | Box2D collision layers the camera sees |
+| `ignore_self` | true | Skip the camera's own model when raycasting |
+| `wall_height` | 1.0 | Virtual wall height (m), affects column projection |
+| `eye_height` | 0.5 | Camera eye height (m); shifts horizon |
+| `shade_min` / `shade_max` | 0.15 / 1.0 | Brightness at far / near distance |
+| `directional_shading` | 0.85 | Multiplier for grazing-angle hits (1.0 disables) |
+| `sky_color`, `floor_color`, `fog_color` | gray-ish defaults | RGB `[0-255]` triples |
+| `broadcast_tf` | false | Publish `base_link → camera_link` transform |
+| `publish_camera_info` | true | Publish synthetic `sensor_msgs/CameraInfo` |
+| `publish_compressed` | true | Publish JPEG-compressed image |
+| `jpeg_quality` | 75 | JPEG quality (1-100) when compressed publishing is on |
+
+### Topics
+
+| Topic | Type | Notes |
+|-------|------|-------|
+| `/image_raw` | `sensor_msgs/Image` | `rgb8` encoding |
+| `/image_raw/camera_info` | `sensor_msgs/CameraInfo` | Static intrinsics (plumb_bob, zero distortion) |
+| `/image_raw/compressed` | `sensor_msgs/CompressedImage` | JPEG, on if `publish_compressed: true` |
+
+### Verifying the camera
+
+```bash
+# Topics exist and publish at the configured rate
+docker compose exec flatland-nav2 ros2 topic hz /image_raw            # ~10 Hz
+docker compose exec flatland-nav2 ros2 topic hz /image_raw/compressed
+docker compose exec flatland-nav2 ros2 topic echo /image_raw/camera_info --once
+
+# Image fields match config
+docker compose exec flatland-nav2 ros2 topic echo /image_raw --field width    --once  # 320
+docker compose exec flatland-nav2 ros2 topic echo /image_raw --field height   --once  # 240
+docker compose exec flatland-nav2 ros2 topic echo /image_raw --field encoding --once  # rgb8
+
+# Open rqt_image_view (see "Viewing the image" above) and drive the robot
+# toward a wall — walls grow and brighten as you approach.
+```
+
 ## InOrbit Agent
 
 An [InOrbit ROS2 agent](https://www.inorbit.ai/) runs as a sidecar container (`inorbitai/agent:ros-jazzy-4.33.0`) alongside the simulation, connecting the simulated robot to your OpenRobOps or InOrbit instance. A second lightweight `busybox` container tails the agent log into the main `docker compose` output for easier debugging. Both services are part of the `agent` Compose profile, enabled by default via `.env`.

@@ -140,32 +140,6 @@ spec:
         grid: 4
         height: 1
       type: vitals
-    - type: chart
-      label: Battery
-      config:
-        chartType: linechart
-        dataSources:
-        - id: batteryPercentage
-          label: Batt %
-          precision: 1
-          scale: 100
-        - id: batteryVoltage
-          label: Batt V
-          precision: 2
-          scale: 1
-        max: 120
-        min: 0
-      layout:
-        chroma: true
-        grid: 8
-        height: 1
-    - config: {}
-      label: Actions
-      layout:
-        chroma: true
-        grid: 4
-        height: 1
-      type: actionsWidget
     - label: Data Sources
       type: listData
       layout:
@@ -192,6 +166,30 @@ spec:
         grid: 4
         height: 1
     - type: chart
+      label: Battery
+      config:
+        chartType: linechart
+        dataSources:
+        - id: batteryPercentage
+          label: Batt %
+          precision: 1
+          scale: 100
+        - id: batteryVoltage
+          label: Batt V
+          precision: 2
+          scale: 1
+        max: 120
+        min: 0
+      layout:
+        chroma: true
+        grid: 8
+        height: 1
+    - type: diagnostics
+      label: Diagnostics
+      layout:
+        chroma: true
+        height: 1
+    - type: chart
       label: System
       config:
         chartType: linechart
@@ -210,6 +208,35 @@ spec:
         chroma: true
         grid: 8
         height: 1
+---
+apiVersion: v0.1
+kind: DashboardDefinition
+metadata:
+  id: ops
+  scope: ''
+spec:
+  label: Ops
+  order: 3
+  sections:
+  - label: Health
+    withControlWidget: true
+    scope: robot
+    widgets:
+    - config: {}
+      label: Actions
+      layout:
+        chroma: true
+        grid: 4
+        height: 1
+      type: actionsWidget
+    - type: cameraWidget
+      label: Front camera
+      config: 
+        cameraId: "0"
+      layout: 
+        chroma: true
+        grid: 4
+        height: 1
     - type: diagnostics
       label: Diagnostics
       layout:
@@ -223,7 +250,7 @@ metadata:
   scope: ''
 spec:
   label: Navigation
-  order: 3
+  order: 4
   sections:
   - label: Robot Navigation
     withControlWidget: false
@@ -235,25 +262,6 @@ spec:
         height: 2
       type: navigation
     withControlWidget: true
-  - label: Details
-    scope: robot
-    widgets:
-    - label: Vitals
-      config:
-        dataSources:
-        - id: cpuLoadPercentage
-          label: CPU usage
-          type: gauge
-          unit: '%'
-        - id: batteryPercentage
-          label: Battery
-          type: gauge
-          unit: '%'
-      layout:
-        chroma: true
-        grid: 4
-        height: 1
-      type: vitals
 ---
 #######################################################################################
 ## ActionDefinition
@@ -388,3 +396,22 @@ spec:
     publish_zero_vel: true
     cmd_vel_topic: "flatland_0/cmd_vel"
 
+# RosImageAgentlet: Set the image topic
+apiVersion: v0.1
+kind: ModuleState
+metadata:
+  id: RosImageAgentlet
+  scope: ''
+spec:
+  state:
+    camera_topics:
+      0: "image_raw/compressed"
+    cameraViewOn: true
+    cameras_config: 
+      0: 
+        output_encoding: 'mono8'
+        quality: 50
+        rate: 2
+        img_width: 320
+        img_height: 240
+        is_on: true

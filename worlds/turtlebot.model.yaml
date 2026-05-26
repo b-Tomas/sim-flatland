@@ -15,7 +15,7 @@ plugins:
   - type: DiffDrive
     name: diff_drive
     body: base_link
-    odom_frame_id: /odom
+    odom_frame_id: odom
     twist_sub: cmd_vel
     odom_pub: odom
     ground_truth_pub: odometry/ground_truth

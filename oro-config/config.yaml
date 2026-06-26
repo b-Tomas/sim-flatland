@@ -426,7 +426,7 @@ spec:
   state:
     publish_zero_vel: true
     cmd_vel_topic: "flatland_0/cmd_vel"
-
+---
 # RosImageAgentlet: Set the image topic
 apiVersion: v0.1
 kind: ModuleState

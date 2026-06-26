@@ -404,6 +404,18 @@ spec:
     path_topics: 
      "0": { "topic": "plan"}
 ---
+# RosDiagnosticsAgentlet: Enable it (runlevel 5) so the agent forwards /diagnostics_agg.
+# Required for ROS Diagnostics key-values to reach ORO and map to attributes
+# (see the nav2Health DataSource above).
+apiVersion: v0.1
+kind: ModuleState
+metadata:
+  id: RosDiagnosticsAgentlet
+  scope: ''
+spec:
+  state:
+    minRunlevel: 5
+---
 # RosTeleopAgentlet: Set the cmd_vel topic
 apiVersion: v0.1
 kind: ModuleState
